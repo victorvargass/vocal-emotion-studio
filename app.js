@@ -30,7 +30,7 @@
   let lines = [], tokens = [], selection = null, anchor = null, editingId = null;
   let mobileSelecting = false, mobileStart = null;
   let noteDraft = { emotion: '', dynamic: 'Natural', action: 'Ninguno' };
-  let audioUrl = null, audioFileName = '';
+  let audioUrl = null, audioFileName = '', audioFileData = null, syncPosition = 0;
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
   let metronome = { context: null, timer: 0, nextTime: 0, beat: 0 };
   let pitchEngine = { source: null, effect: null, ready: false, failed: false };
@@ -356,20 +356,155 @@
     $('syncSummary').textContent = audioUrl && marked ? `${marked} ${marked === 1 ? 'línea sincronizada' : 'líneas sincronizadas'}` : `Avance a ${state.bpm} BPM`;
   }
 
+  function openSyncStudio() {
+    if (!audioUrl) { showToast('Primero carga una pista'); return; }
+    const playable = nonEmptyLines();
+    if (!playable.length) { showToast('La canción todavía no tiene letra'); return; }
+    const firstUnmarked = playable.findIndex(index => !Number.isFinite(state.timestamps[index]));
+    syncPosition = firstUnmarked >= 0 ? firstUnmarked : 0;
+    $('syncBackdrop').hidden = false; updateSyncView(false); updateSyncTransport();
+  }
+
+  function closeSyncStudio() {
+    $('audioPlayer').pause(); $('syncBackdrop').hidden = true; updateSyncTransport();
+  }
+
+  function updateSyncView(seekToMark = false) {
+    const playable = nonEmptyLines();
+    syncPosition = clamp(syncPosition, 0, Math.max(0, playable.length - 1));
+    const lineIndex = playable[syncPosition], line = lines[lineIndex], markedAt = state.timestamps[lineIndex];
+    $('syncProgressText').textContent = `Línea ${syncPosition + 1} de ${playable.length}`;
+    $('syncProgressFill').style.width = `${playable.length ? (syncPosition + 1) / playable.length * 100 : 0}%`;
+    $('syncLineText').textContent = line?.raw || '';
+    $('syncPrevious').disabled = syncPosition === 0; $('syncNext').disabled = syncPosition >= playable.length - 1;
+    $('syncRemoveMark').hidden = !Number.isFinite(markedAt);
+    $('syncMark').classList.toggle('marked', Number.isFinite(markedAt));
+    $('syncMark').querySelector('span').textContent = Number.isFinite(markedAt) ? 'Actualizar entrada' : 'Marcar entrada';
+    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatTime(markedAt)}` : 'Pulsa cuando comience esta línea';
+    if (seekToMark && Number.isFinite(markedAt)) $('audioPlayer').currentTime = markedAt;
+  }
+
+  function updateSyncTransport() {
+    const audio = $('audioPlayer'), duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+    $('syncCurrentTime').textContent = formatTime(audio.currentTime); $('syncTotalTime').textContent = formatTime(duration);
+    $('syncSeek').max = duration || 1; $('syncSeek').value = Math.min(audio.currentTime, duration || 0);
+    $('syncPlayPause').textContent = audio.paused ? '▶' : 'Ⅱ'; $('syncPlayPause').ariaLabel = audio.paused ? 'Reproducir pista' : 'Pausar pista';
+  }
+
+  function toggleSyncPlayback() {
+    if ($('audioPlayer').paused) $('audioPlayer').play().catch(() => showToast('No pude iniciar el audio'));
+    else $('audioPlayer').pause();
+  }
+
+  function moveSyncLine(direction) {
+    syncPosition += direction; updateSyncView(true);
+  }
+
+  function markCurrentSyncLine() {
+    const playable = nonEmptyLines(), lineIndex = playable[syncPosition];
+    if (lineIndex === undefined) return;
+    state.timestamps[lineIndex] = Number($('audioPlayer').currentTime.toFixed(2));
+    persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+    if (syncPosition < playable.length - 1) { syncPosition += 1; updateSyncView(false); }
+    else showToast('Sincronización completa');
+  }
+
+  function removeCurrentSyncMark() {
+    const lineIndex = nonEmptyLines()[syncPosition];
+    if (lineIndex === undefined) return;
+    state.timestamps[lineIndex] = null; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+  }
+
+  function clearAllSyncMarks() {
+    if (!state.timestamps.some(Number.isFinite) || !confirm('¿Borrar todas las marcas de sincronización?')) return;
+    state.timestamps = []; syncPosition = 0; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+  }
+
   function loadAudio(file) {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
-    audioUrl = URL.createObjectURL(file); audioFileName = file.name;
+    audioUrl = URL.createObjectURL(file); audioFileName = file.name; audioFileData = file;
     $('audioPlayer').src = audioUrl; $('audioName').textContent = file.name;
     $('audioEmpty').hidden = true; $('audioLoaded').hidden = false;
     setupPitchProcessing(); syncPitchControls();
+    $('tempoStatus').textContent = 'Detectando tempo…'; detectTempo(file);
     updateSyncSummary(); showToast('Pista cargada. Ahora puedes marcar las líneas.');
   }
 
   function removeAudio() {
+    if (!$('syncBackdrop').hidden) closeSyncStudio();
     $('audioPlayer').pause();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
-    audioUrl = null; audioFileName = ''; $('audioPlayer').removeAttribute('src');
+    audioUrl = null; audioFileName = ''; audioFileData = null; $('audioPlayer').removeAttribute('src');
     $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; syncPitchControls(); updateSyncSummary();
+  }
+
+  async function detectTempo(file = audioFileData) {
+    if (!file) return;
+    const button = $('detectTempo'); button.disabled = true; button.textContent = 'Analizando…';
+    $('tempoStatus').textContent = 'Escuchando el pulso de la pista…';
+    let context;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error('AudioContext no disponible');
+      context = new AudioContextClass();
+      const buffer = await context.decodeAudioData(await file.arrayBuffer());
+      const bpm = estimateTempo(buffer);
+      if (!bpm) throw new Error('No se encontró un pulso estable');
+      setBpm(bpm);
+      $('tempoStatus').textContent = `Tempo detectado: ${bpm} BPM · estimado`;
+      showToast(`Tempo estimado: ${bpm} BPM`);
+    } catch (error) {
+      $('tempoStatus').textContent = 'No pude detectar un pulso claro. Puedes ajustar el BPM manualmente.';
+    } finally {
+      context?.close?.(); button.disabled = false; button.textContent = 'Detectar BPM';
+    }
+  }
+
+  function estimateTempo(buffer) {
+    const sampleRate = buffer.sampleRate, blockSize = 1024;
+    const sampleCount = Math.min(buffer.length, Math.floor(sampleRate * 120));
+    const blockCount = Math.floor(sampleCount / blockSize);
+    if (blockCount < 20) return null;
+    const energies = new Float32Array(blockCount), channels = Math.min(buffer.numberOfChannels, 2);
+    for (let block = 0; block < blockCount; block++) {
+      let total = 0;
+      for (let channel = 0; channel < channels; channel++) {
+        const data = buffer.getChannelData(channel), start = block * blockSize;
+        for (let i = start; i < start + blockSize; i += 2) total += Math.abs(data[i]);
+      }
+      energies[block] = total / (channels * blockSize / 2);
+    }
+    const flux = new Float32Array(blockCount);
+    for (let i = 1; i < blockCount; i++) flux[i] = Math.max(0, energies[i] - energies[i - 1]);
+    const peaks = [], minimumGap = Math.max(1, Math.floor(sampleRate * 0.22 / blockSize));
+    let lastPeak = -minimumGap;
+    for (let i = 4; i < blockCount - 4; i++) {
+      let localMean = 0;
+      for (let j = i - 4; j <= i + 4; j++) localMean += flux[j];
+      localMean /= 9;
+      if (flux[i] > localMean * 1.45 && flux[i] >= flux[i - 1] && flux[i] > flux[i + 1] && i - lastPeak >= minimumGap) {
+        peaks.push(i * blockSize / sampleRate); lastPeak = i;
+      }
+    }
+    if (peaks.length < 6) return null;
+    const scores = new Float32Array(241);
+    for (let i = 0; i < peaks.length; i++) {
+      for (let j = i + 1; j < Math.min(peaks.length, i + 9); j++) {
+        const interval = peaks[j] - peaks[i];
+        if (interval < 0.25 || interval > 2) continue;
+        let bpm = 60 / interval;
+        while (bpm < 60) bpm *= 2;
+        while (bpm > 200) bpm /= 2;
+        const rounded = Math.round(bpm);
+        if (rounded >= 40 && rounded <= 240) scores[rounded] += 1 / (j - i);
+      }
+    }
+    let bestBpm = 0, bestScore = 0;
+    for (let bpm = 40; bpm <= 240; bpm++) {
+      const clustered = scores[bpm] + (scores[bpm - 1] || 0) * 0.6 + (scores[bpm + 1] || 0) * 0.6;
+      if (clustered > bestScore) { bestScore = clustered; bestBpm = bpm; }
+    }
+    return bestScore > 0 ? bestBpm : null;
   }
 
   function pitchDescription(value = state.semitones) {
@@ -619,8 +754,14 @@
     const playable = nonEmptyLines();
     if (audioUrl && !$('audioPlayer').paused) {
       rehearsal.elapsed = $('audioPlayer').currentTime;
-      const timed = playable.filter(index => Number.isFinite(state.timestamps[index]) && state.timestamps[index] <= rehearsal.elapsed);
-      if (timed.length) focusTeleLine(timed.at(-1));
+      const markedLines = playable.filter(index => Number.isFinite(state.timestamps[index]));
+      if (markedLines.length) {
+        const timed = markedLines.filter(index => state.timestamps[index] <= rehearsal.elapsed);
+        focusTeleLine(timed.length ? timed.at(-1) : playable[0]);
+      } else {
+        const position = Math.min(Math.floor(rehearsal.elapsed / lineDuration()), playable.length - 1);
+        focusTeleLine(playable[position]);
+      }
       if ($('audioPlayer').ended) { pauseRehearsal(); return; }
     } else {
       rehearsal.elapsed = (now - rehearsal.startedAt) / 1000;
@@ -724,9 +865,15 @@
     $('beatsInput').addEventListener('change', () => { state.beatsPerLine = Number($('beatsInput').value); persist(); });
     $('chooseAudio').addEventListener('click', () => $('audioFile').click()); $('audioFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) loadAudio(file); event.target.value = ''; }); $('removeAudio').addEventListener('click', removeAudio);
     $('pitchDown').addEventListener('click', () => setPitch(state.semitones - 1)); $('pitchUp').addEventListener('click', () => setPitch(state.semitones + 1)); $('pitchSlider').addEventListener('input', () => setPitch($('pitchSlider').value));
-    $('audioPlayer').addEventListener('loadedmetadata', () => { $('audioDuration').textContent = `${formatTime($('audioPlayer').duration)} · Lista para sincronizar`; updateTransport(); });
-    $('audioPlayer').addEventListener('play', () => { resumePitchAudio(); if (!rehearsal.playing) startMetronome(); });
-    $('audioPlayer').addEventListener('pause', () => { if (!rehearsal.playing) stopMetronome(); });
+    $('detectTempo').addEventListener('click', () => detectTempo()); $('openSync').addEventListener('click', openSyncStudio);
+    $('audioPlayer').addEventListener('loadedmetadata', () => { $('audioDuration').textContent = `${formatTime($('audioPlayer').duration)} · Lista para sincronizar`; updateTransport(); updateSyncTransport(); });
+    $('audioPlayer').addEventListener('timeupdate', updateSyncTransport);
+    $('audioPlayer').addEventListener('play', () => { resumePitchAudio(); updateSyncTransport(); if (!rehearsal.playing) startMetronome(); });
+    $('audioPlayer').addEventListener('pause', () => { updateSyncTransport(); if (!rehearsal.playing) stopMetronome(); });
+    $('closeSync').addEventListener('click', closeSyncStudio); $('finishSync').addEventListener('click', closeSyncStudio); $('syncBackdrop').addEventListener('click', event => { if (event.target === $('syncBackdrop')) closeSyncStudio(); });
+    $('syncPlayPause').addEventListener('click', toggleSyncPlayback); $('syncPrevious').addEventListener('click', () => moveSyncLine(-1)); $('syncNext').addEventListener('click', () => moveSyncLine(1));
+    $('syncMark').addEventListener('click', markCurrentSyncLine); $('syncRemoveMark').addEventListener('click', removeCurrentSyncMark); $('clearSync').addEventListener('click', clearAllSyncMarks);
+    $('syncSeek').addEventListener('input', () => { $('audioPlayer').currentTime = Number($('syncSeek').value); updateSyncTransport(); });
     $('startRehearsal').addEventListener('click', enterRehearsal); $('exitRehearsal').addEventListener('click', () => setMode('prepare')); $('rehearsalSettings').addEventListener('click', openMetronomeSettings);
     $('closeMetronome').addEventListener('click', closeMetronomeSettings); $('metronomeBackdrop').addEventListener('click', event => { if (event.target === $('metronomeBackdrop')) closeMetronomeSettings(); });
     $('liveBpmDown').addEventListener('click', () => setBpm(state.bpm - 1)); $('liveBpmUp').addEventListener('click', () => setBpm(state.bpm + 1));
@@ -738,7 +885,8 @@
     $('libraryButton').addEventListener('click', () => { renderLibrary(); $('libraryBackdrop').hidden = false; }); $('closeLibrary').addEventListener('click', () => $('libraryBackdrop').hidden = true); $('libraryBackdrop').addEventListener('click', event => { if (event.target === $('libraryBackdrop')) $('libraryBackdrop').hidden = true; });
     $('newSong').addEventListener('click', createNewSong); $('exportSong').addEventListener('click', exportCurrent); $('importSong').addEventListener('click', () => $('importFile').click()); $('importFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSong(file); event.target.value = ''; });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { if (!$('noteBackdrop').hidden) closeAnnotation(); else if (!$('libraryBackdrop').hidden) $('libraryBackdrop').hidden = true; else if (!$('metronomeBackdrop').hidden) closeMetronomeSettings(); }
+      if (event.key === 'Escape') { if (!$('noteBackdrop').hidden) closeAnnotation(); else if (!$('libraryBackdrop').hidden) $('libraryBackdrop').hidden = true; else if (!$('metronomeBackdrop').hidden) closeMetronomeSettings(); else if (!$('syncBackdrop').hidden) closeSyncStudio(); }
+      if (!$('syncBackdrop').hidden && event.key.toLowerCase() === 'm' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { event.preventDefault(); markCurrentSyncLine(); }
       const rehearsing = !document.querySelector('[data-panel="rehearse"]').hidden;
       if (rehearsing && event.code === 'Space' && !['INPUT', 'TEXTAREA', 'BUTTON'].includes(document.activeElement?.tagName)) { event.preventDefault(); toggleRehearsal(); }
       if (rehearsing && event.key === 'ArrowUp') { event.preventDefault(); moveLine(-1); }
