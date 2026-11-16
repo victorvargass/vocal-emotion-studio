@@ -1,73 +1,78 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101322"><title>Vocal Emotion Studio</title>
-<style>
-:root{font-family:system-ui,-apple-system,sans-serif;color-scheme:dark;background:#101322;color:#f5f5fa}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:18px 16px 70px}h1{font-size:clamp(25px,4vw,38px);margin:0}h2{font-size:19px;margin:0 0 12px}p,.muted{color:#abb6ce}header{padding:14px 0 8px}section{background:#1b2034;border:1px solid #343d58;border-radius:15px;padding:18px;margin:14px 0}label{display:block;font-size:13px;color:#c4cce2;margin:10px 0 5px}input,textarea,select{width:100%;background:#11172a;border:1px solid #47516c;color:white;border-radius:8px;padding:10px;font:inherit}textarea{resize:vertical}button{background:#394260;color:white;border:1px solid #53607e;border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit}button.primary{background:#8059e6;border-color:#8059e6}button:hover{filter:brightness(1.12)}button:focus-visible,.token:focus-visible{outline:2px solid #c5aaff;outline-offset:2px}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hidden{display:none!important}.hint{font-size:13px}.lyrics{padding:18px;background:#101728;border-radius:10px;max-height:58vh;min-height:160px;overflow:auto;line-height:2.35;user-select:text}.lyric-line{min-height:1.6em}.token{display:inline;border-radius:4px;padding:2px 1px;cursor:pointer;white-space:pre-wrap}.token.marked{border-bottom:2px solid var(--mark)}.token.chosen{outline:2px solid #c7b0ff;background:#65519c44}.token:hover{background:#ffffff18}.legend{font-size:12px;color:#aeb8d0;margin-top:12px}.modal-backdrop{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;padding:14px;z-index:20}.modal{background:#1b2034;border:1px solid #59637c;border-radius:16px;padding:20px;width:min(100%,600px);max-height:90vh;overflow:auto;box-shadow:0 20px 70px #0008}.modal-head{display:flex;justify-content:space-between;align-items:start;gap:10px}.excerpt{background:#101728;border-radius:9px;padding:10px;margin:10px 0;max-height:100px;overflow:auto}.status{font-size:13px;color:#a9e6c5;min-height:20px}.practice .editing{display:none}.practice .lyrics{max-height:80vh;font-size:clamp(20px,3vw,29px);line-height:2.7}.practice .token{font-size:inherit}@media(max-width:560px){.grid{grid-template-columns:1fr}section{padding:13px}.modal{padding:15px}.lyrics{max-height:53vh}}
-</style></head><body><main>
-<header><h1>🎙️ Vocal Emotion Studio</h1><p>Escribe, selecciona frases y construye tu interpretación.</p></header>
-<section class="editing"><details id="editDetails"><summary style="cursor:pointer;font-weight:650">✍️ Editar letra y título</summary><label for="title">Título</label><input id="title" value="Mi primera canción"><label for="lyrics">Letra</label><textarea id="lyrics" rows="7">Hoy vuelvo a recordar
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5efe7">
+  <meta name="description" content="Prepara la intención de una canción y ensáyala con un teleprompter musical.">
+  <title>Vocal Emotion Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" id="homeButton" aria-label="Ir al inicio"><span class="brand-mark" aria-hidden="true">V</span><span><strong>Vocal Emotion</strong><small>Studio</small></span></button>
+      <nav class="mode-switcher" aria-label="Etapas de trabajo">
+        <button data-mode="write"><span>1</span> Escribir</button>
+        <button data-mode="prepare" class="active"><span>2</span> Preparar</button>
+        <button data-mode="rehearse"><span>3</span> Ensayar</button>
+      </nav>
+      <button class="icon-button" id="libraryButton" aria-label="Abrir canciones" title="Mis canciones"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Zm2 0v14h12M9.5 8h6M9.5 12h6"/></svg></button>
+    </header>
+    <main>
+      <section class="workspace mode-panel" data-panel="write" hidden>
+        <div class="section-heading"><div><span class="eyebrow">La canción</span><h1>Dale un lugar a la letra</h1></div><p>Pega la letra tal como quieres verla en escena. Cada salto de línea será un paso del teleprompter.</p></div>
+        <div class="writing-card">
+          <label class="field-title" for="songTitle">Título</label><input id="songTitle" class="title-input" value="Volver a mirar" autocomplete="off">
+          <label class="field-title" for="lyricsInput">Letra</label>
+          <textarea id="lyricsInput" class="lyrics-input" spellcheck="true">Hoy vuelvo a recordar
 todo lo que te quería
 y aunque intento sonreír
-todavía siento tu partida</textarea><div class="actions"><button id="prepare" class="primary">Aplicar cambios a la letra</button><button id="new">Nueva canción</button></div><p class="hint">Al reemplazar la letra se reinician las marcas para evitar que se desplacen a palabras equivocadas.</p></details></section>
-<section><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">🎭 Partitura emocional</h2><button id="practice">Modo ensayo</button></div>
-<p class="hint editing">Toca una palabra para ver sus notas. Para varias palabras o una frase, <strong>arrastra sobre el texto</strong> y pulsa «Ver selección». En computadora también puedes usar Mayús + clic.</p>
-<div class="actions editing"><button id="annotate" class="primary" disabled>Ver selección / añadir nota</button><button id="cancelSelection">Limpiar selección</button></div>
-<div class="lyrics" id="display" aria-label="Letra anotable"></div>
-<div class="legend">🔵 Tristeza · 🟣 Nostalgia · 🔴 Rabia · 🟢 Esperanza · 🟠 Amor · 🟡 Alegría · ✦ Toca una marca para ver sus notas</div>
-<p id="selectionInfo" class="hint editing">Selecciona una palabra o frase.</p></section>
-<section class="editing"><h2>💾 Mis canciones</h2><p class="hint">Tus canciones se guardan en este navegador, no se sincronizan entre dispositivos. Exporta una copia JSON.</p><div class="actions"><button class="primary" id="saveSong">Guardar canción</button><button id="export">Exportar notas</button><button id="backup">Copia JSON</button><button id="importButton">Importar JSON</button><input type="file" id="import" accept=".json,application/json" hidden></div><label for="songs">Canciones guardadas</label><select id="songs"></select><div class="actions"><button id="load">Abrir</button><button id="delete">Eliminar guardada</button></div><p class="status" id="status" role="status"></p></section>
-</main>
-<div class="modal-backdrop hidden" id="backdrop"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-<div class="modal-head"><h2 id="modalTitle">Interpretación del fragmento</h2><button id="close" aria-label="Cerrar ventana">✕</button></div><div id="excerpt" class="excerpt"></div><div id="viewNote" class="hidden"><p id="viewEmotion"></p><p id="viewIntensity"></p><p id="viewTechnique"></p><p id="viewAction"></p><p id="viewComment" style="white-space:pre-wrap"></p><div class="actions"><button id="editNote" class="primary">Editar anotación</button><button id="closeView">Cerrar</button></div></div><div id="editFields"><div class="grid">
-<div><label for="emotion">Emoción</label><select id="emotion"><option value="">Sin marcar</option><option>Tristeza</option><option>Nostalgia</option><option>Rabia</option><option>Esperanza</option><option>Amor</option><option>Alegría</option><option>Vulnerabilidad</option><option>Determinación</option><option>Miedo</option><option>Resignación</option></select></div>
-<div><label for="intensity">Intensidad</label><select id="intensity"><option>Natural</option><option>Muy suave</option><option>Suave</option><option>Media</option><option>Intensa</option><option>Creciente</option><option>Decreciente</option></select></div>
-<div><label for="technique">Recurso vocal</label><select id="technique"><option>Natural</option><option>Susurrado</option><option>Voz aireada</option><option>Legato</option><option>Staccato</option><option>Vibrato</option><option>Énfasis</option><option>Voz firme</option></select></div>
-<div><label for="action">Acción</label><select id="action"><option>Ninguna</option><option>Respirar antes</option><option>Pausa antes</option><option>Pausa después</option><option>Sostener frase</option><option>Alargar vocal</option><option>Mirar al público</option></select></div></div>
-<label for="note">Comentario detallado e intención</label><textarea id="note" rows="5" placeholder="¿Qué emoción quiero transmitir? ¿Cómo cantaré esta frase?"></textarea>
-<div class="actions"><button class="primary" id="saveNote">Guardar anotación</button><button id="removeNote">Eliminar anotación</button><button id="cancelModal">Cancelar</button></div></div>
-</div></div>
-<script>
-(()=>{'use strict';
-const $=id=>document.getElementById(id),key='vocal-emotion-studio-v1',colors={Tristeza:'#4489dc',Nostalgia:'#a377db',Rabia:'#df6868',Esperanza:'#47a985',Amor:'#e69b58',Alegría:'#dfbb43',Vulnerabilidad:'#ba87b6',Determinación:'#d87754',Miedo:'#8a8a9a',Resignación:'#8e9eae'};
-let lines=[],tokens=[],marks=[],selection=null,anchor=null,loaded=null,editingMark=null,previousFocus=null;
-const msg=s=>$('status').textContent=s,parse=s=>s.split('\n').map(l=>l.match(/\S+/g)||[]);
-function rebuild(){lines=parse($('lyrics').value);tokens=[];lines.forEach((line,i)=>line.forEach((word,j)=>tokens.push({word,line:i,col:j,index:tokens.length})))}
-function phrase(start,end){return tokens.slice(start,end+1).map(t=>t.word).join(' ')}
-function findMark(i){return marks.findLast?marks.findLast(m=>m.start<=i&&m.end>=i):[...marks].reverse().find(m=>m.start<=i&&m.end>=i)}
-function clearSelect(){selection=null;anchor=null;rangeStart=null;updateSelection();render()}
-function updateSelection(){$('annotate').disabled=!selection;$('selectionInfo').textContent=selection?'Seleccionado: «'+phrase(selection.start,selection.end)+'»':'Selecciona una palabra o frase.'}
-function setSelection(a,b){selection={start:Math.min(a,b),end:Math.max(a,b)};updateSelection();render()}
-function render(){const d=$('display');d.replaceChildren();let idx=0;lines.forEach(line=>{const div=document.createElement('div');div.className='lyric-line';if(!line.length)div.textContent='\u00a0';line.forEach((word,j)=>{const i=idx++,m=findMark(i),span=document.createElement('span');span.className='token'+(m?' marked':'')+(selection&&i>=selection.start&&i<=selection.end?' chosen':'');span.dataset.index=String(i);span.tabIndex=0;span.textContent=word;span.style.setProperty('--mark',colors[m?.emotion]||'#c4b5fd');span.title=m?[m.emotion,m.note].filter(Boolean).join(' · '):'Tocar para ver o anotar';span.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose(i,e.shiftKey)}});span.addEventListener('click',e=>{if(ignoreClick){ignoreClick=false;return}if(window.getSelection()?.toString().trim())return;choose(i,e.shiftKey)});div.appendChild(span);if(j<line.length-1)div.appendChild(document.createTextNode(' '))});d.appendChild(div)})}
-let ignoreClick=false;
-function choose(i,shift){if(shift&&anchor!==null){setSelection(anchor,i);openModal();return}anchor=i;const m=findMark(i);if(m){setSelection(m.start,m.end);openModal(m)}else{setSelection(i,i);openModal()}}
-function captureNativeSelection(){const sel=window.getSelection();if(!sel||sel.isCollapsed||!sel.toString().trim())return false;const nodes=[sel.anchorNode,sel.focusNode].map(n=>n?.nodeType===1?n:n?.parentElement).map(el=>el?.closest?.('.token'));if(nodes.some(n=>!n||!$('display').contains(n)))return false;const a=Number(nodes[0].dataset.index),b=Number(nodes[1].dataset.index);if(!Number.isInteger(a)||!Number.isInteger(b))return false;anchor=a;selection={start:Math.min(a,b),end:Math.max(a,b)};updateSelection();ignoreClick=true;setTimeout(()=>{ignoreClick=false},300);return true}
-$('display').addEventListener('pointerup',()=>setTimeout(captureNativeSelection,20));
-$('display').addEventListener('touchend',()=>setTimeout(captureNativeSelection,80),{passive:true});
-function showEdit(){$('viewNote').classList.add('hidden');$('editFields').classList.remove('hidden');$('emotion').focus()}
-function openModal(mark=null){if(!selection)return;editingMark=mark||marks.find(m=>m.start===selection.start&&m.end===selection.end)||null;previousFocus=document.activeElement;$('excerpt').textContent=phrase(selection.start,selection.end);const n=editingMark||{};for(const f of ['emotion','intensity','technique','action'])$(f).value=n[f]||({emotion:'',intensity:'Natural',technique:'Natural',action:'Ninguna'}[f]);$('note').value=n.note||'';$('removeNote').disabled=!editingMark;$('backdrop').classList.remove('hidden');if(editingMark){$('modalTitle').textContent='Notas del fragmento';$('viewEmotion').textContent='🎭 Emoción: '+(n.emotion||'Sin marcar');$('viewIntensity').textContent='🎚️ Intensidad: '+(n.intensity||'Natural');$('viewTechnique').textContent='🎤 Recurso vocal: '+(n.technique||'Natural');$('viewAction').textContent='⏸️ Acción: '+(n.action||'Ninguna');$('viewComment').textContent='📝 Comentario: '+(n.note||'Sin comentario');$('viewNote').classList.remove('hidden');$('editFields').classList.add('hidden');$('editNote').focus()}else{$('modalTitle').textContent='Nueva anotación';showEdit()}}
-function closeModal(){$('backdrop').classList.add('hidden');previousFocus?.focus?.()}
-$('annotate').onclick=()=>{captureNativeSelection();openModal()};
-$('editNote').onclick=showEdit;
-$('closeView').onclick=$('close').onclick=$('cancelModal').onclick=closeModal;
-$('backdrop').addEventListener('click',e=>{if(e.target===$('backdrop'))closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('backdrop').classList.contains('hidden'))closeModal()});
-$('saveNote').onclick=()=>{if(!selection)return;const n={...selection,emotion:$('emotion').value,intensity:$('intensity').value,technique:$('technique').value,action:$('action').value,note:$('note').value};if(editingMark)marks=marks.filter(m=>m!==editingMark);marks=marks.filter(m=>m.end<n.start||m.start>n.end);marks.push(n);marks.sort((a,b)=>a.start-b.start);closeModal();clearSelect();msg('Anotación guardada en el editor. Guarda la canción para conservarla.')};
-$('removeNote').onclick=()=>{if(editingMark)marks=marks.filter(m=>m!==editingMark);closeModal();clearSelect();msg('Anotación eliminada.')};
-$('cancelSelection').onclick=clearSelect;
-$('practice').onclick=()=>{document.body.classList.toggle('practice');$('practice').textContent=document.body.classList.contains('practice')?'Salir del modo ensayo':'Modo ensayo'};
-$('prepare').onclick=()=>{if(marks.length&&!confirm('¿Aplicar cambios y borrar las anotaciones anteriores?'))return;rebuild();marks=[];clearSelect();loaded=null;msg('Letra actualizada.')};
-function read(){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}
-function write(all){try{localStorage.setItem(key,JSON.stringify(all));return true}catch{msg('No se pudo guardar; exporta una copia.');return false}}
-function refresh(){const s=$('songs');s.replaceChildren();const first=document.createElement('option');first.value='';first.textContent='Selecciona una canción';s.appendChild(first);read().forEach(x=>{const o=document.createElement('option');o.value=x.id;o.textContent=x.title;s.appendChild(o)});if(loaded)s.value=loaded}
-function normalize(raw){if(Array.isArray(raw.marks))return raw.marks.filter(m=>Number.isInteger(m.start)&&Number.isInteger(m.end)&&m.start>=0&&m.end>=m.start&&m.end<tokens.length).sort((a,b)=>a.start-b.start);const legacy=raw.notes||raw.annotations||{};return Object.entries(legacy).map(([k,n])=>{const [i,j]=k.split(':').map(Number);const t=tokens.find(t=>t.line===i&&t.col===j);return t?{start:t.index,end:t.index,...n}:null}).filter(Boolean)}
-$('saveSong').onclick=()=>{const all=read(),id=loaded||'song-'+Date.now(),s={id,title:$('title').value.trim()||'Sin título',lyrics:$('lyrics').value,marks},i=all.findIndex(x=>x.id===id);if(i<0)all.push(s);else all[i]=s;if(write(all)){loaded=id;refresh();msg('Canción guardada.')}};
-$('load').onclick=()=>{const s=read().find(x=>x.id===$('songs').value);if(!s)return;loaded=s.id;$('title').value=s.title;$('lyrics').value=s.lyrics;rebuild();marks=normalize(s);clearSelect();msg('Canción abierta.')};
-$('delete').onclick=()=>{const id=$('songs').value;if(!id||!confirm('¿Eliminar esta canción guardada?'))return;write(read().filter(s=>s.id!==id));if(loaded===id)loaded=null;refresh();msg('Canción eliminada.')};
-$('new').onclick=()=>{if(!confirm('¿Crear una canción nueva? Guarda antes los cambios.'))return;$('title').value='Nueva canción';$('lyrics').value='';rebuild();marks=[];loaded=null;clearSelect();refresh();$('editDetails').open=true};
-function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$('export').onclick=()=>{const text=['CANCIÓN: '+$('title').value,'',$('lyrics').value,'','ANOTACIONES',...marks.map(m=>'«'+phrase(m.start,m.end)+'» (palabras '+(m.start+1)+'-'+(m.end+1)+'): '+[m.emotion,m.intensity,m.technique,m.action,m.note].filter(Boolean).join(' | '))].join('\n');download('interpretacion.txt',text,'text/plain;charset=utf-8');msg('Notas exportadas.')};
-$('backup').onclick=()=>{download('vocal-emotion-backup.json',JSON.stringify({title:$('title').value,lyrics:$('lyrics').value,marks},null,2),'application/json');msg('Copia JSON descargada.')};
-$('importButton').onclick=()=>$('import').click();
-$('import').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const s=JSON.parse(await f.text());if(typeof s.lyrics!=='string')throw Error('Formato no válido');if(!confirm('¿Reemplazar la canción actual por la copia?'))return;$('title').value=String(s.title||'Importada');$('lyrics').value=s.lyrics;rebuild();marks=normalize(s);loaded=null;clearSelect();msg('Copia importada. Guarda la canción.')}catch(err){msg('No se pudo importar: '+err.message)}finally{e.target.value=''}};
-rebuild();render();refresh();
-})();
-</script></body></html>
+todavía siento tu partida
+
+Pero respiro y miro al frente
+queda una luz dentro de mí</textarea>
+          <div class="writing-footer"><span id="lyricsCount">0 líneas · 0 palabras</span><button class="primary-button" id="applyLyrics">Continuar a preparar <span>→</span></button></div>
+        </div>
+      </section>
+      <section class="workspace mode-panel" data-panel="prepare">
+        <div class="prep-header">
+          <div><span class="eyebrow">Partitura emocional</span><h1 id="displayTitle">Volver a mirar</h1><p>Selecciona palabras para dejar una intención, una respiración o un gesto.</p></div>
+          <div class="header-actions"><button class="soft-button" id="clearSelection">Limpiar selección</button><button class="primary-button" id="openNote" disabled>+ Añadir indicación</button></div>
+        </div>
+        <div class="prepare-layout">
+          <article class="score-card"><div class="selection-tip" id="selectionTip"><span aria-hidden="true">↗</span><span><strong>Empieza por una frase.</strong> Arrastra sobre la letra o usa Mayús + clic.</span><button id="dismissTip" aria-label="Ocultar ayuda">×</button></div><div class="lyrics-score" id="lyricsScore" aria-label="Letra para anotar"></div></article>
+          <aside class="song-setup">
+            <div class="setup-heading"><span class="eyebrow">Pulso y pista</span><span class="saved-state" id="savedState">Guardado</span></div>
+            <label class="setting-row" for="bpmInput"><span><strong>Tempo</strong><small>Para avanzar sin pista</small></span><span class="number-control"><button type="button" data-step="-1" aria-label="Bajar BPM">−</button><input id="bpmInput" type="number" min="40" max="240" value="76" aria-label="BPM"><em>BPM</em><button type="button" data-step="1" aria-label="Subir BPM">+</button></span></label>
+            <label class="setting-row" for="beatsInput"><span><strong>Duración por línea</strong><small>Estimación del teleprompter</small></span><select id="beatsInput"><option value="2">2 pulsos</option><option value="4" selected>4 pulsos</option><option value="8">8 pulsos</option><option value="16">16 pulsos</option></select></label>
+            <div class="audio-box" id="audioBox">
+              <div class="audio-empty" id="audioEmpty"><span class="audio-icon" aria-hidden="true">♪</span><div><strong>Añadir pista de karaoke</strong><small>El audio no sale de tu dispositivo</small></div><button class="soft-button" id="chooseAudio">Elegir audio</button><input id="audioFile" type="file" accept="audio/*" hidden></div>
+              <div class="audio-loaded" id="audioLoaded" hidden><div class="audio-file-row"><span class="audio-icon">♪</span><div><strong id="audioName"></strong><small id="audioDuration">Lista para sincronizar</small></div><button class="icon-button small" id="removeAudio" aria-label="Quitar pista">×</button></div><audio id="audioPlayer" controls preload="metadata"></audio><p>Reproduce la pista y pulsa <strong>Marcar aquí</strong> en cada línea cuando comience.</p></div>
+            </div>
+            <button class="rehearse-cta" id="startRehearsal"><span class="play-icon">▶</span><span><strong>Ensayar canción</strong><small id="syncSummary">Avance a 76 BPM</small></span><span>→</span></button>
+          </aside>
+        </div>
+      </section>
+      <section class="mode-panel rehearsal" data-panel="rehearse" hidden>
+        <header class="rehearsal-header"><button class="soft-button compact" id="exitRehearsal">← Preparar</button><div><span id="rehearsalTitle">Volver a mirar</span><small id="rehearsalMeta">76 BPM · 4 pulsos por línea</small></div><button class="icon-button" id="rehearsalFullscreen" title="Pantalla completa" aria-label="Usar pantalla completa"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></header>
+        <div class="teleprompter" id="teleprompter" tabindex="0" aria-label="Teleprompter"></div><div class="count-in" id="countIn" hidden><span>Prepárate</span><strong>4</strong></div>
+        <footer class="transport"><button class="icon-button transport-skip" id="previousLine" aria-label="Línea anterior">↶</button><button class="transport-play" id="playPause" aria-label="Comenzar ensayo">▶</button><button class="icon-button transport-skip" id="nextLine" aria-label="Línea siguiente">↷</button><div class="progress-wrap"><span id="currentTime">0:00</span><div class="progress-track"><div id="progressFill"></div></div><span id="totalTime">0:00</span></div><button class="soft-button compact" id="rehearsalSettings">Ajustes</button></footer>
+      </section>
+    </main>
+  </div>
+  <div class="sheet-backdrop" id="noteBackdrop" hidden>
+    <section class="note-sheet" role="dialog" aria-modal="true" aria-labelledby="noteTitle"><header><div><span class="eyebrow">Indicación</span><h2 id="noteTitle">¿Cómo quieres cantarlo?</h2></div><button class="icon-button" id="closeNote" aria-label="Cerrar">×</button></header><blockquote id="selectedPhrase"></blockquote>
+      <div class="note-scroll"><fieldset><legend>Color emocional <small>opcional</small></legend><div class="choice-chips emotion-chips" id="emotionChoices"></div></fieldset><fieldset><legend>Dinámica</legend><div class="choice-chips" id="dynamicChoices"></div></fieldset><fieldset><legend>Recurso o gesto</legend><div class="choice-chips" id="actionChoices"></div></fieldset><label class="note-label" for="noteText">Una nota para ti <small>opcional</small></label><textarea id="noteText" rows="3" placeholder="Ej. No empujar; decirlo como si fuera un secreto…"></textarea></div>
+      <footer><button class="danger-link" id="deleteNote" hidden>Eliminar</button><span></span><button class="soft-button" id="cancelNote">Cancelar</button><button class="primary-button" id="saveNote">Guardar indicación</button></footer>
+    </section>
+  </div>
+  <div class="sheet-backdrop" id="libraryBackdrop" hidden>
+    <section class="library-sheet" role="dialog" aria-modal="true" aria-labelledby="libraryTitle"><header><div><span class="eyebrow">Tu repertorio</span><h2 id="libraryTitle">Mis canciones</h2></div><button class="icon-button" id="closeLibrary" aria-label="Cerrar">×</button></header><div class="library-actions"><button class="primary-button" id="newSong">+ Nueva canción</button><button class="soft-button" id="importSong">Importar</button><input id="importFile" type="file" accept="application/json,.json" hidden></div><div class="song-list" id="songList"></div><footer><button class="soft-button" id="exportSong">Descargar copia</button></footer></section>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div><script src="app.js"></script>
+</body>
+</html>
