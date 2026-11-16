@@ -564,6 +564,17 @@
     updateTransport();
   }
 
+  function restartSong() {
+    const firstLine = nonEmptyLines()[0] ?? 0;
+    const wasPlaying = rehearsal.playing;
+    if (wasPlaying) cancelAnimationFrame(rehearsal.raf);
+    rehearsal.elapsed = 0; rehearsal.startedAt = performance.now();
+    if (audioUrl) $('audioPlayer').currentTime = 0;
+    focusTeleLine(firstLine);
+    if (wasPlaying) { startMetronome(); rehearsal.raf = requestAnimationFrame(tick); }
+    updateTransport(); showToast('Volvimos al inicio');
+  }
+
   function toggleRehearsal() {
     if (rehearsal.playing) { pauseRehearsal(); return; }
     startCountIn();
@@ -722,7 +733,7 @@
     $('livePitchDown').addEventListener('click', () => setPitch(state.semitones - 1)); $('livePitchUp').addEventListener('click', () => setPitch(state.semitones + 1));
     $('liveBpm').addEventListener('change', () => setBpm($('liveBpm').value)); $('liveMeter').addEventListener('change', () => setMeter($('liveMeter').value));
     $('liveMetronomeEnabled').addEventListener('change', () => setMetronomeEnabled($('liveMetronomeEnabled').checked)); $('liveVolume').addEventListener('input', () => setMetronomeVolume($('liveVolume').value));
-    $('playPause').addEventListener('click', toggleRehearsal); $('previousLine').addEventListener('click', () => moveLine(-1)); $('nextLine').addEventListener('click', () => moveLine(1));
+    $('playPause').addEventListener('click', toggleRehearsal); $('restartSong').addEventListener('click', restartSong); $('previousLine').addEventListener('click', () => moveLine(-1)); $('nextLine').addEventListener('click', () => moveLine(1));
     $('rehearsalFullscreen').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => showToast('Pantalla completa no disponible')));
     $('libraryButton').addEventListener('click', () => { renderLibrary(); $('libraryBackdrop').hidden = false; }); $('closeLibrary').addEventListener('click', () => $('libraryBackdrop').hidden = true); $('libraryBackdrop').addEventListener('click', event => { if (event.target === $('libraryBackdrop')) $('libraryBackdrop').hidden = true; });
     $('newSong').addEventListener('click', createNewSong); $('exportSong').addEventListener('click', exportCurrent); $('importSong').addEventListener('click', () => $('importFile').click()); $('importFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSong(file); event.target.value = ''; });

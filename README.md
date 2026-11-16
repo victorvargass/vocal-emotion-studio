@@ -12,7 +12,7 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 - Cargar una pista de karaoke local y marcar el inicio de cada línea mientras suena.
 - Transponer la pista entre −6 y +6 semitonos sin cambiar el tempo.
 - Guardar automáticamente varias canciones en el navegador e importarlas o exportarlas en JSON.
-- Usar el modo ensayo en pantalla completa y controlarlo con espacio y las flechas arriba/abajo.
+- Usar el modo ensayo en pantalla completa, reiniciarlo desde `0:00` y controlarlo con espacio y las flechas arriba/abajo.
 
 ## Uso rápido
 
