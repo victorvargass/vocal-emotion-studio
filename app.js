@@ -24,6 +24,7 @@
     updatedAt: Date.now()
   };
   let lines = [], tokens = [], selection = null, anchor = null, editingId = null;
+  let mobileSelecting = false, mobileStart = null;
   let noteDraft = { emotion: '', dynamic: 'Natural', action: 'Ninguno' };
   let audioUrl = null, audioFileName = '';
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
@@ -196,6 +197,24 @@
 
   function handleWordClick(index, event) {
     if (window.getSelection()?.toString().trim()) return;
+    if (mobileSelecting) {
+      if (mobileStart === null) {
+        mobileStart = index; anchor = index;
+        selection = { start: index, end: index };
+        $('openNote').disabled = true;
+        $('mobileSelectionGuide').querySelector('.selection-step').textContent = '2';
+        $('mobileSelectionText').textContent = 'Ahora toca la última palabra de la frase';
+        updateSelectionControls(); renderScore();
+      } else {
+        setSelection(mobileStart, index);
+        mobileSelecting = false; mobileStart = null;
+        document.body.classList.remove('mobile-range-selecting');
+        $('mobileSelectionGuide').hidden = true;
+        updateSelectionControls();
+        showToast('Frase seleccionada. Ya puedes añadir la indicación.');
+      }
+      return;
+    }
     if (event.shiftKey && anchor !== null) {
       setSelection(anchor, index);
       return;
@@ -210,15 +229,44 @@
     selection = { start: Math.min(a, b), end: Math.max(a, b) };
     $('openNote').disabled = false;
     $('openNote').textContent = `+ Indicar “${phrase(selection.start, selection.end).slice(0, 24)}${phrase(selection.start, selection.end).length > 24 ? '…' : ''}”`;
+    updateSelectionControls();
     renderScore();
   }
 
   function clearSelection(render = true) {
-    selection = null; anchor = null;
+    selection = null; anchor = null; mobileSelecting = false; mobileStart = null;
+    document.body.classList.remove('mobile-range-selecting');
     $('openNote').disabled = true;
     $('openNote').textContent = '+ Añadir indicación';
+    $('mobileSelectionGuide').hidden = true;
+    updateSelectionControls();
     window.getSelection()?.removeAllRanges();
     if (render) renderScore();
+  }
+
+  function isMobileLayout() { return window.matchMedia('(max-width: 700px)').matches; }
+
+  function updateSelectionControls() {
+    if (!isMobileLayout()) { $('clearSelection').textContent = 'Limpiar selección'; return; }
+    if (mobileSelecting) $('clearSelection').textContent = 'Cancelar selección';
+    else if (selection) $('clearSelection').textContent = 'Cambiar selección';
+    else $('clearSelection').textContent = 'Seleccionar frase';
+  }
+
+  function beginMobileSelection() {
+    selection = null; anchor = null; mobileSelecting = true; mobileStart = null;
+    document.body.classList.add('mobile-range-selecting');
+    $('openNote').disabled = true; $('openNote').textContent = '+ Añadir indicación';
+    $('mobileSelectionGuide').hidden = false;
+    $('mobileSelectionGuide').querySelector('.selection-step').textContent = '1';
+    $('mobileSelectionText').textContent = 'Toca la primera palabra de la frase';
+    window.getSelection()?.removeAllRanges();
+    updateSelectionControls(); renderScore();
+  }
+
+  function handleSelectionButton() {
+    if (!isMobileLayout()) { clearSelection(); return; }
+    if (mobileSelecting) clearSelection(); else beginMobileSelection();
   }
 
   function captureNativeSelection() {
@@ -495,7 +543,8 @@
       parseLyrics(state.lyrics); $('displayTitle').textContent = state.title; clearSelection(false); renderScore(); persist(); setMode('prepare');
     });
     $('lyricsScore').addEventListener('pointerup', () => setTimeout(captureNativeSelection, 20));
-    $('openNote').addEventListener('click', () => openAnnotation()); $('clearSelection').addEventListener('click', () => clearSelection());
+    $('openNote').addEventListener('click', () => openAnnotation()); $('clearSelection').addEventListener('click', handleSelectionButton);
+    $('cancelMobileSelection').addEventListener('click', () => clearSelection());
     $('dismissTip').addEventListener('click', () => { $('selectionTip').hidden = true; localStorage.setItem('ves-tip-dismissed', '1'); });
     if (localStorage.getItem('ves-tip-dismissed')) $('selectionTip').hidden = true;
     $('closeNote').addEventListener('click', closeAnnotation); $('cancelNote').addEventListener('click', closeAnnotation); $('saveNote').addEventListener('click', saveAnnotation); $('deleteNote').addEventListener('click', deleteAnnotation);
@@ -517,6 +566,8 @@
       if (rehearsing && event.key === 'ArrowUp') { event.preventDefault(); moveLine(-1); }
       if (rehearsing && event.key === 'ArrowDown') { event.preventDefault(); moveLine(1); }
     });
+    window.addEventListener('resize', updateSelectionControls);
+    updateSelectionControls();
   }
 
   initialize();

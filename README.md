@@ -15,7 +15,7 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 ## Uso rápido
 
 1. En **Escribir**, pega la letra y separa las frases como quieras verlas al cantar.
-2. En **Preparar**, arrastra sobre una frase o usa Mayús + clic y añade una indicación.
+2. En **Preparar**, selecciona una frase y añade una indicación. En celular pulsa **Seleccionar frase** y toca la primera y la última palabra; en computador puedes arrastrar o usar Mayús + clic.
 3. Ajusta el BPM y la duración estimada de cada línea.
 4. Opcionalmente, carga una pista. Reprodúcela y pulsa **Marcar aquí** cuando empiece cada línea.
 5. Entra a **Ensayar**. Sin marcas de audio la letra sigue el BPM; con marcas, sigue la pista.
