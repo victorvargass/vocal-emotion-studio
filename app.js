@@ -24,13 +24,14 @@
     semitones: 0,
     beatsPerLine: 4,
     annotations: [],
+    downbeatTime: null,
     timestamps: [],
     updatedAt: Date.now()
   };
   let lines = [], tokens = [], selection = null, anchor = null, editingId = null;
   let mobileSelecting = false, mobileStart = null;
   let noteDraft = { emotion: '', dynamic: 'Natural', action: 'Ninguno' };
-  let audioUrl = null, audioFileName = '', audioFileData = null, syncPosition = 0, tempoAnalysisId = 0;
+  let audioUrl = null, audioFileName = '', audioFileData = null, syncPosition = 0, tempoAnalysisId = 0, prepareActiveLine = null;
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
   let metronome = { context: null, timer: 0, nextTime: 0, beat: 0 };
   let pitchEngine = { source: null, effect: null, ready: false, failed: false };
@@ -76,7 +77,8 @@
       semitones: clamp(Math.round(Number(raw.semitones) || 0), -6, 6),
       beatsPerLine: [2, 4, 8, 16].includes(Number(raw.beatsPerLine)) ? Number(raw.beatsPerLine) : 4,
       annotations,
-      timestamps: Array.isArray(raw.timestamps) ? raw.timestamps.map(value => Number.isFinite(Number(value)) ? Number(value) : null) : [],
+      downbeatTime: raw.downbeatTime !== null && raw.downbeatTime !== '' && Number.isFinite(Number(raw.downbeatTime)) ? Number(raw.downbeatTime) : null,
+      timestamps: Array.isArray(raw.timestamps) ? raw.timestamps.map(value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null) : [],
       updatedAt: Number(raw.updatedAt) || Date.now()
     };
   }
@@ -163,6 +165,7 @@
     lines.forEach(line => {
       const row = document.createElement('div');
       row.className = `score-line${line.words.length ? '' : ' blank'}`;
+      row.dataset.lineIndex = line.lineIndex;
       row.dataset.line = line.lineIndex;
       if (!line.words.length) row.append('\u00a0');
       line.words.forEach((token, wordIndex) => {
@@ -203,13 +206,59 @@
         const sync = document.createElement('button');
         const time = state.timestamps[line.lineIndex];
         sync.className = `line-sync${Number.isFinite(time) ? ' synced' : ''}`;
-        sync.textContent = Number.isFinite(time) ? `Entrada ${formatMarkerTime(time)}` : 'Marcar entrada';
-        sync.title = Number.isFinite(time) ? 'Abrir esta entrada para modificarla o borrarla' : 'Elegir cuándo comienza esta línea';
+        sync.textContent = Number.isFinite(time) ? `Inicio ${formatMarkerTime(time)}` : 'Marcar inicio';
+        sync.title = Number.isFinite(time) ? 'Instante en que comienza esta frase · pulsa para modificarlo o borrarlo' : 'Elegir cuándo comienza esta frase';
         sync.addEventListener('click', event => markLineTime(line.lineIndex, event));
         row.appendChild(sync);
+        const playhead = document.createElement('span'); playhead.className = 'playback-playhead'; playhead.ariaHidden = 'true';
+        row.appendChild(playhead);
       }
       score.appendChild(row);
     });
+    updatePreparePlaybackCursor();
+  }
+
+  function updatePreparePlaybackCursor() {
+    const audio = $('audioPlayer'), playable = nonEmptyLines();
+    document.querySelectorAll('.score-line.playback-active').forEach(row => { row.classList.remove('playback-active'); row.style.removeProperty('--line-progress'); });
+    if (!audioUrl || !playable.length || !Number.isFinite(audio.currentTime)) { prepareActiveLine = null; return; }
+
+    const current = audio.currentTime, { times } = estimatedLineTimes(playable);
+    let position = 0;
+    for (let index = 0; index < times.length; index += 1) { if (times[index] <= current) position = index; else break; }
+    const lineIndex = playable[position], start = times[position];
+    const end = times[position + 1] ?? (Number.isFinite(audio.duration) ? audio.duration : start + lineDuration());
+
+    const row = document.querySelector(`.score-line[data-line-index="${lineIndex}"]`);
+    if (!row) return;
+    const progress = end > start ? clamp((current - start) / (end - start), 0, 1) : 1;
+    row.classList.add('playback-active'); row.style.setProperty('--line-progress', `${(progress * 100).toFixed(2)}%`);
+    if (!audio.paused && prepareActiveLine !== lineIndex && document.querySelector('.lyrics-accordion')?.open) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    prepareActiveLine = lineIndex;
+  }
+
+  function estimatedLineTimes(playable = nonEmptyLines()) {
+    const times = playable.map(lineIndex => Number.isFinite(state.timestamps[lineIndex]) ? state.timestamps[lineIndex] : null);
+    const anchors = times.map((time, position) => ({ position, time })).filter(anchor => Number.isFinite(anchor.time));
+    if (!anchors.length) return { times: playable.map((_, position) => position * lineDuration()), step: lineDuration(), anchors };
+
+    const learnedSteps = [];
+    for (let index = 1; index < anchors.length; index += 1) {
+      const distance = anchors[index].position - anchors[index - 1].position;
+      const duration = anchors[index].time - anchors[index - 1].time;
+      if (distance > 0 && duration > 0) learnedSteps.push(duration / distance);
+    }
+    learnedSteps.sort((a, b) => a - b);
+    const step = learnedSteps.length ? learnedSteps[Math.floor(learnedSteps.length / 2)] : lineDuration();
+    for (let anchorIndex = 1; anchorIndex < anchors.length; anchorIndex += 1) {
+      const previous = anchors[anchorIndex - 1], next = anchors[anchorIndex];
+      const segmentStep = (next.time - previous.time) / (next.position - previous.position);
+      for (let position = previous.position + 1; position < next.position; position += 1) times[position] = previous.time + segmentStep * (position - previous.position);
+    }
+    const first = anchors[0], last = anchors[anchors.length - 1];
+    for (let position = first.position - 1; position >= 0; position -= 1) times[position] = Math.max(0, first.time - step * (first.position - position));
+    for (let position = last.position + 1; position < times.length; position += 1) times[position] = last.time + step * (position - last.position);
+    return { times, step, anchors };
   }
 
   function escapeHtml(value) {
@@ -358,7 +407,8 @@
   function updateSyncSummary() {
     const playable = nonEmptyLines(), marked = playable.filter(index => Number.isFinite(state.timestamps[index])).length;
     $('syncSummary').textContent = audioUrl && marked ? `${marked} ${marked === 1 ? 'línea sincronizada' : 'líneas sincronizadas'}` : `Avance a ${state.bpm} BPM`;
-    $('resetSyncMarks').disabled = marked === 0;
+    $('downbeatStatus').textContent = Number.isFinite(state.downbeatTime) ? `Pulso 1: ${formatMarkerTime(state.downbeatTime)} · ancla del metrónomo` : 'Pulso 1: todavía sin marcar';
+    $('resetSyncMarks').disabled = marked === 0 && !Number.isFinite(state.downbeatTime);
     $('completeSyncMarks').disabled = marked === 0 || marked === playable.length;
   }
 
@@ -366,10 +416,10 @@
     if (!audioUrl) { showToast('Primero carga una pista'); return; }
     const playable = nonEmptyLines();
     if (!playable.length) { showToast('La canción todavía no tiene letra'); return; }
-    const requestedPosition = targetLineIndex === null ? -1 : playable.indexOf(targetLineIndex);
+    const requestedPosition = targetLineIndex === null ? null : playable.indexOf(targetLineIndex);
     const firstUnmarked = playable.findIndex(index => !Number.isFinite(state.timestamps[index]));
-    syncPosition = requestedPosition >= 0 ? requestedPosition : (firstUnmarked >= 0 ? firstUnmarked : 0);
-    $('syncBackdrop').hidden = false; updateSyncView(requestedPosition >= 0); updateSyncTransport();
+    syncPosition = requestedPosition !== null && requestedPosition >= 0 ? requestedPosition : (!Number.isFinite(state.downbeatTime) ? -1 : (firstUnmarked >= 0 ? firstUnmarked : 0));
+    $('syncBackdrop').hidden = false; updateSyncView(requestedPosition !== null && requestedPosition >= 0); updateSyncTransport();
   }
 
   function closeSyncStudio() {
@@ -378,16 +428,17 @@
 
   function updateSyncView(seekToMark = false) {
     const playable = nonEmptyLines();
-    syncPosition = clamp(syncPosition, 0, Math.max(0, playable.length - 1));
-    const lineIndex = playable[syncPosition], line = lines[lineIndex], markedAt = state.timestamps[lineIndex];
-    $('syncProgressText').textContent = `Línea ${syncPosition + 1} de ${playable.length}`;
-    $('syncProgressFill').style.width = `${playable.length ? (syncPosition + 1) / playable.length * 100 : 0}%`;
-    $('syncLineText').textContent = line?.raw || '';
-    $('syncPrevious').disabled = syncPosition === 0; $('syncNext').disabled = syncPosition >= playable.length - 1;
+    syncPosition = clamp(syncPosition, -1, Math.max(-1, playable.length - 1));
+    const isBeatStep = syncPosition === -1, lineIndex = isBeatStep ? null : playable[syncPosition], line = isBeatStep ? null : lines[lineIndex];
+    const markedAt = isBeatStep ? state.downbeatTime : state.timestamps[lineIndex], totalSteps = playable.length + 1;
+    $('syncProgressText').textContent = isBeatStep ? 'Ancla musical · Pulso 1' : `Frase ${syncPosition + 1} de ${playable.length}`;
+    $('syncProgressFill').style.width = `${totalSteps ? (syncPosition + 2) / totalSteps * 100 : 0}%`;
+    $('syncLineText').textContent = isBeatStep ? 'Primer pulso fuerte del compás' : (line?.raw || '');
+    $('syncPrevious').disabled = isBeatStep; $('syncNext').disabled = syncPosition >= playable.length - 1;
     $('syncRemoveMark').hidden = !Number.isFinite(markedAt);
     $('syncMark').classList.toggle('marked', Number.isFinite(markedAt));
-    $('syncMark').querySelector('span').textContent = Number.isFinite(markedAt) ? 'Actualizar entrada' : 'Marcar entrada';
-    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatMarkerTime(markedAt)} · puedes moverla o borrarla` : 'Pulsa cuando comience esta línea';
+    $('syncMark').querySelector('span').textContent = Number.isFinite(markedAt) ? (isBeatStep ? 'Actualizar Pulso 1' : 'Actualizar inicio') : (isBeatStep ? 'Marcar Pulso 1' : 'Marcar inicio');
+    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatMarkerTime(markedAt)} · puedes moverla o borrarla` : (isBeatStep ? 'Pulsa en el primer pulso fuerte del compás' : 'Pulsa cuando comience esta frase');
     if (seekToMark && Number.isFinite(markedAt)) $('audioPlayer').currentTime = markedAt;
   }
 
@@ -414,7 +465,12 @@
   }
 
   function markCurrentSyncLine() {
-    const playable = nonEmptyLines(), lineIndex = playable[syncPosition];
+    const playable = nonEmptyLines();
+    if (syncPosition === -1) {
+      state.downbeatTime = Number($('audioPlayer').currentTime.toFixed(2));
+      persist(); updateSyncSummary(); updateSyncView(false); syncPosition = 0; updateSyncView(false); return;
+    }
+    const lineIndex = playable[syncPosition];
     if (lineIndex === undefined) return;
     state.timestamps[lineIndex] = Number($('audioPlayer').currentTime.toFixed(2));
     persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
@@ -423,6 +479,7 @@
   }
 
   function removeCurrentSyncMark() {
+    if (syncPosition === -1) { state.downbeatTime = null; persist(); updateSyncSummary(); updateSyncView(false); return; }
     const lineIndex = nonEmptyLines()[syncPosition];
     if (lineIndex === undefined) return;
     state.timestamps[lineIndex] = null; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
@@ -430,39 +487,20 @@
 
   function completeSyncMarks() {
     const playable = nonEmptyLines();
-    const anchors = playable.map((lineIndex, position) => ({ lineIndex, position, time: state.timestamps[lineIndex] })).filter(anchor => Number.isFinite(anchor.time));
+    const { times, step, anchors } = estimatedLineTimes(playable);
     if (!anchors.length) { showToast('Marca al menos una línea primero'); return; }
-
-    const learnedSteps = [];
-    for (let index = 1; index < anchors.length; index += 1) {
-      const distance = anchors[index].position - anchors[index - 1].position;
-      const duration = anchors[index].time - anchors[index - 1].time;
-      if (distance > 0 && duration > 0) learnedSteps.push(duration / distance);
-    }
-    learnedSteps.sort((a, b) => a - b);
-    const step = learnedSteps.length ? learnedSteps[Math.floor(learnedSteps.length / 2)] : lineDuration();
     const audioDuration = Number.isFinite($('audioPlayer').duration) ? $('audioPlayer').duration : Infinity;
-    const setEstimated = (position, time) => {
-      const lineIndex = playable[position];
-      if (!Number.isFinite(state.timestamps[lineIndex])) state.timestamps[lineIndex] = Number(clamp(time, 0, audioDuration).toFixed(2));
-    };
-
-    for (let anchorIndex = 1; anchorIndex < anchors.length; anchorIndex += 1) {
-      const previous = anchors[anchorIndex - 1], next = anchors[anchorIndex];
-      const segmentStep = (next.time - previous.time) / (next.position - previous.position);
-      for (let position = previous.position + 1; position < next.position; position += 1) setEstimated(position, previous.time + segmentStep * (position - previous.position));
-    }
-    const first = anchors[0], last = anchors[anchors.length - 1];
-    for (let position = first.position - 1; position >= 0; position -= 1) setEstimated(position, first.time - step * (first.position - position));
-    for (let position = last.position + 1; position < playable.length; position += 1) setEstimated(position, last.time + step * (position - last.position));
+    playable.forEach((lineIndex, position) => {
+      if (!Number.isFinite(state.timestamps[lineIndex])) state.timestamps[lineIndex] = Number(clamp(times[position], 0, audioDuration).toFixed(2));
+    });
 
     persist(); renderScore(); updateSyncSummary();
     showToast(`Marcas completadas usando ${step.toFixed(1)} s por línea`);
   }
 
   function clearAllSyncMarks() {
-    if (!state.timestamps.some(Number.isFinite) || !confirm('¿Borrar todas las marcas de sincronización?')) return;
-    state.timestamps = []; syncPosition = 0; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+    if ((!state.timestamps.some(Number.isFinite) && !Number.isFinite(state.downbeatTime)) || !confirm('¿Borrar el Pulso 1 y todas las marcas de frases?')) return;
+    state.downbeatTime = null; state.timestamps = []; syncPosition = -1; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
   }
 
   function loadAudio(file) {
@@ -626,14 +664,28 @@
     }
   }
 
-  function startMetronome() {
+  function firstBeatAnchor() {
+    return Number.isFinite(state.downbeatTime) ? state.downbeatTime : null;
+  }
+
+  function startMetronome(alignToTrack = true) {
     stopMetronome();
     if (!state.metronomeEnabled) { updateMetronomeButton(); return; }
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) { showToast('Este navegador no permite reproducir el metrónomo'); return; }
     metronome.context ||= new AudioContextClass();
     metronome.context.resume().catch(() => {});
-    metronome.beat = 0; metronome.nextTime = metronome.context.currentTime + 0.04;
+    const audio = $('audioPlayer'), anchor = alignToTrack && audioUrl ? firstBeatAnchor() : null;
+    if (Number.isFinite(anchor)) {
+      const beatDuration = 60 / state.bpm, songTime = audio.currentTime;
+      let beatIndex = songTime < anchor ? 0 : Math.ceil((songTime - anchor) / beatDuration - 0.0001);
+      let nextSongBeat = anchor + beatIndex * beatDuration;
+      if (nextSongBeat - songTime < 0.03) { beatIndex += 1; nextSongBeat += beatDuration; }
+      metronome.beat = beatIndex % meterBeats();
+      metronome.nextTime = metronome.context.currentTime + Math.max(0.03, nextSongBeat - songTime);
+    } else {
+      metronome.beat = 0; metronome.nextTime = metronome.context.currentTime + 0.04;
+    }
     runMetronomeScheduler(); metronome.timer = setInterval(runMetronomeScheduler, 25);
     updateMetronomeButton();
   }
@@ -771,7 +823,7 @@
     if (syncedAudio && $('audioPlayer').currentTime > 0) { playRehearsal(); return; }
     let count = meterBeats();
     resumePitchAudio();
-    startMetronome();
+    startMetronome(false);
     $('countIn').hidden = false; $('countIn').querySelector('strong').textContent = count;
     const beatMs = 60000 / state.bpm;
     clearInterval(rehearsal.countTimer);
@@ -859,7 +911,7 @@
   }
 
   function createNewSong() {
-    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, meter: '4/4', metronomeEnabled: true, metronomeVolume: 0.55, semitones: 0, beatsPerLine: 4, annotations: [], timestamps: [], updatedAt: Date.now() };
+    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, meter: '4/4', metronomeEnabled: true, metronomeVolume: 0.55, semitones: 0, beatsPerLine: 4, annotations: [], downbeatTime: null, timestamps: [], updatedAt: Date.now() };
     removeAudio(); updateEditorFromState(); persist(true); $('libraryBackdrop').hidden = true; setMode('write'); $('songTitle').select();
   }
 
@@ -918,9 +970,11 @@
     $('pitchDown').addEventListener('click', () => setPitch(state.semitones - 1)); $('pitchUp').addEventListener('click', () => setPitch(state.semitones + 1)); $('pitchSlider').addEventListener('input', () => setPitch($('pitchSlider').value));
     $('detectTempo').addEventListener('click', () => detectTempo()); $('openSync').addEventListener('click', openSyncStudio);
     $('audioPlayer').addEventListener('loadedmetadata', () => { $('audioDuration').textContent = `${formatTime($('audioPlayer').duration)} · Lista para sincronizar`; updateTransport(); updateSyncTransport(); });
-    $('audioPlayer').addEventListener('timeupdate', updateSyncTransport);
-    $('audioPlayer').addEventListener('play', () => { resumePitchAudio(); updateSyncTransport(); if (!rehearsal.playing) startMetronome(); });
-    $('audioPlayer').addEventListener('pause', () => { updateSyncTransport(); if (!rehearsal.playing) stopMetronome(); });
+    $('audioPlayer').addEventListener('timeupdate', () => { updateSyncTransport(); updatePreparePlaybackCursor(); });
+    $('audioPlayer').addEventListener('seeking', updatePreparePlaybackCursor);
+    $('audioPlayer').addEventListener('seeked', () => { updatePreparePlaybackCursor(); if (!$('audioPlayer').paused) restartMetronomeIfPlaying(); });
+    $('audioPlayer').addEventListener('play', () => { resumePitchAudio(); updateSyncTransport(); updatePreparePlaybackCursor(); if (!rehearsal.playing) startMetronome(); });
+    $('audioPlayer').addEventListener('pause', () => { updateSyncTransport(); updatePreparePlaybackCursor(); if (!rehearsal.playing) stopMetronome(); });
     $('closeSync').addEventListener('click', closeSyncStudio); $('finishSync').addEventListener('click', closeSyncStudio); $('syncBackdrop').addEventListener('click', event => { if (event.target === $('syncBackdrop')) closeSyncStudio(); });
     $('syncPlayPause').addEventListener('click', toggleSyncPlayback); $('syncPrevious').addEventListener('click', () => moveSyncLine(-1)); $('syncNext').addEventListener('click', () => moveSyncLine(1));
     $('syncNudgeBack').addEventListener('click', () => nudgeSyncTime(-0.1)); $('syncNudgeForward').addEventListener('click', () => nudgeSyncTime(0.1));
