@@ -18,6 +18,9 @@
     title: $('songTitle').value,
     lyrics: $('lyricsInput').value,
     bpm: 76,
+    meter: '4/4',
+    metronomeEnabled: true,
+    metronomeVolume: 0.55,
     beatsPerLine: 4,
     annotations: [],
     timestamps: [],
@@ -28,6 +31,7 @@
   let noteDraft = { emotion: '', dynamic: 'Natural', action: 'Ninguno' };
   let audioUrl = null, audioFileName = '';
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
+  let metronome = { context: null, timer: 0, nextTime: 0, beat: 0 };
   let saveTimer = 0, toastTimer = 0;
 
   function parseLyrics(text) {
@@ -64,6 +68,9 @@
       id: String(raw.id || `song-${Date.now()}`),
       title: String(raw.title || 'Sin título'), lyrics,
       bpm: clamp(Number(raw.bpm) || 76, 40, 240),
+      meter: ['2/4', '3/4', '4/4', '6/8'].includes(raw.meter) ? raw.meter : '4/4',
+      metronomeEnabled: raw.metronomeEnabled !== false,
+      metronomeVolume: clamp(Number.isFinite(Number(raw.metronomeVolume)) ? Number(raw.metronomeVolume) : 0.55, 0, 1),
       beatsPerLine: [2, 4, 8, 16].includes(Number(raw.beatsPerLine)) ? Number(raw.beatsPerLine) : 4,
       annotations,
       timestamps: Array.isArray(raw.timestamps) ? raw.timestamps.map(value => Number.isFinite(Number(value)) ? Number(value) : null) : [],
@@ -113,7 +120,12 @@
     $('lyricsInput').value = state.lyrics;
     $('displayTitle').textContent = state.title;
     $('bpmInput').value = state.bpm;
+    $('meterInput').value = state.meter;
+    $('metronomeEnabled').checked = state.metronomeEnabled;
+    $('metronomeVolume').value = Math.round(state.metronomeVolume * 100);
+    $('metronomeVolumeValue').textContent = `${Math.round(state.metronomeVolume * 100)}%`;
     $('beatsInput').value = state.beatsPerLine;
+    syncMetronomeControls();
     parseLyrics(state.lyrics);
     updateCount();
     clearSelection(false);
@@ -355,6 +367,90 @@
     $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; updateSyncSummary();
   }
 
+  function meterBeats() { return Number(state.meter.split('/')[0]) || 4; }
+
+  function scheduleMetronomeClick(time, accented) {
+    const context = metronome.context;
+    if (!context || !state.metronomeEnabled || state.metronomeVolume <= 0) return;
+    const oscillator = context.createOscillator(), gain = context.createGain();
+    oscillator.frequency.value = accented ? 1320 : 880;
+    gain.gain.setValueAtTime(Math.max(0.0001, state.metronomeVolume * (accented ? 0.32 : 0.2)), time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + (accented ? 0.055 : 0.035));
+    oscillator.connect(gain); gain.connect(context.destination);
+    oscillator.start(time); oscillator.stop(time + 0.06);
+  }
+
+  function runMetronomeScheduler() {
+    if (!metronome.context) return;
+    while (metronome.nextTime < metronome.context.currentTime + 0.12) {
+      scheduleMetronomeClick(metronome.nextTime, metronome.beat === 0);
+      metronome.nextTime += 60 / state.bpm;
+      metronome.beat = (metronome.beat + 1) % meterBeats();
+    }
+  }
+
+  function startMetronome() {
+    stopMetronome();
+    if (!state.metronomeEnabled) { updateMetronomeButton(); return; }
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) { showToast('Este navegador no permite reproducir el metrónomo'); return; }
+    metronome.context ||= new AudioContextClass();
+    metronome.context.resume().catch(() => {});
+    metronome.beat = 0; metronome.nextTime = metronome.context.currentTime + 0.04;
+    runMetronomeScheduler(); metronome.timer = setInterval(runMetronomeScheduler, 25);
+    updateMetronomeButton();
+  }
+
+  function stopMetronome() {
+    clearInterval(metronome.timer); metronome.timer = 0; updateMetronomeButton();
+  }
+
+  function restartMetronomeIfPlaying() {
+    if (rehearsal.playing || (audioUrl && !$('audioPlayer').paused)) startMetronome();
+  }
+
+  function updateMetronomeButton() {
+    $('rehearsalSettings').classList.toggle('metronome-on', state.metronomeEnabled);
+    $('rehearsalSettings').title = state.metronomeEnabled ? `Metrónomo activo · ${state.bpm} BPM · ${state.meter}` : 'Metrónomo apagado';
+  }
+
+  function syncMetronomeControls() {
+    $('bpmInput').value = state.bpm; $('meterInput').value = state.meter;
+    $('metronomeEnabled').checked = state.metronomeEnabled;
+    $('metronomeVolume').value = Math.round(state.metronomeVolume * 100);
+    $('metronomeVolumeValue').textContent = `${Math.round(state.metronomeVolume * 100)}%`;
+    $('liveBpm').value = state.bpm; $('liveMeter').value = state.meter;
+    $('liveMetronomeEnabled').checked = state.metronomeEnabled;
+    $('liveVolume').value = Math.round(state.metronomeVolume * 100);
+    $('liveVolumeValue').textContent = `${Math.round(state.metronomeVolume * 100)}%`;
+    updateMetronomeButton(); updateSyncSummary();
+  }
+
+  function setBpm(value) {
+    state.bpm = clamp(Number(value) || 76, 40, 240);
+    syncMetronomeControls(); restartMetronomeIfPlaying(); persist();
+    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = `${state.bpm} BPM · ${state.meter}${audioUrl ? ` · Siguiendo ${audioFileName}` : ` · ${state.beatsPerLine} pulsos por línea`}`;
+  }
+
+  function setMeter(value) {
+    state.meter = ['2/4', '3/4', '4/4', '6/8'].includes(value) ? value : '4/4';
+    syncMetronomeControls(); restartMetronomeIfPlaying(); persist();
+    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = `${state.bpm} BPM · ${state.meter}${audioUrl ? ` · Siguiendo ${audioFileName}` : ` · ${state.beatsPerLine} pulsos por línea`}`;
+  }
+
+  function setMetronomeEnabled(enabled) {
+    state.metronomeEnabled = Boolean(enabled); syncMetronomeControls();
+    if (state.metronomeEnabled) restartMetronomeIfPlaying(); else stopMetronome();
+    persist();
+  }
+
+  function setMetronomeVolume(value) {
+    state.metronomeVolume = clamp(Number(value) / 100, 0, 1); syncMetronomeControls(); persist();
+  }
+
+  function openMetronomeSettings() { syncMetronomeControls(); $('metronomeBackdrop').hidden = false; }
+  function closeMetronomeSettings() { $('metronomeBackdrop').hidden = true; }
+
   function nonEmptyLines() { return lines.filter(line => line.words.length).map(line => line.lineIndex); }
   function lineDuration() { return state.beatsPerLine * 60 / state.bpm; }
 
@@ -365,7 +461,7 @@
     rehearsal.line = nonEmptyLines()[0] ?? 0; rehearsal.elapsed = 0;
     $('rehearsalTitle').textContent = state.title;
     const synced = audioUrl && state.timestamps.filter(Number.isFinite).length > 0;
-    $('rehearsalMeta').textContent = synced ? `Siguiendo ${audioFileName}` : `${state.bpm} BPM · ${state.beatsPerLine} pulsos por línea`;
+    $('rehearsalMeta').textContent = synced ? `${state.bpm} BPM · ${state.meter} · Siguiendo ${audioFileName}` : `${state.bpm} BPM · ${state.meter} · ${state.beatsPerLine} pulsos por línea`;
     renderTeleprompter(); updateTransport();
     setTimeout(() => focusTeleLine(rehearsal.line, false), 40);
   }
@@ -420,7 +516,8 @@
   function startCountIn() {
     const syncedAudio = audioUrl && state.timestamps.filter(Number.isFinite).length;
     if (syncedAudio && $('audioPlayer').currentTime > 0) { playRehearsal(); return; }
-    let count = 4;
+    let count = meterBeats();
+    startMetronome();
     $('countIn').hidden = false; $('countIn').querySelector('strong').textContent = count;
     const beatMs = 60000 / state.bpm;
     clearInterval(rehearsal.countTimer);
@@ -434,12 +531,13 @@
   function playRehearsal() {
     rehearsal.playing = true; rehearsal.startedAt = performance.now() - rehearsal.elapsed * 1000;
     if (audioUrl) $('audioPlayer').play().catch(() => showToast('Pulsa play nuevamente para iniciar el audio'));
+    startMetronome();
     $('playPause').textContent = 'Ⅱ'; $('playPause').ariaLabel = 'Pausar ensayo';
     cancelAnimationFrame(rehearsal.raf); rehearsal.raf = requestAnimationFrame(tick);
   }
 
   function pauseRehearsal() {
-    rehearsal.playing = false; cancelAnimationFrame(rehearsal.raf); $('audioPlayer').pause();
+    rehearsal.playing = false; cancelAnimationFrame(rehearsal.raf); $('audioPlayer').pause(); stopMetronome();
     $('playPause').textContent = '▶'; $('playPause').ariaLabel = 'Continuar ensayo';
   }
 
@@ -500,7 +598,7 @@
   }
 
   function createNewSong() {
-    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, beatsPerLine: 4, annotations: [], timestamps: [], updatedAt: Date.now() };
+    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, meter: '4/4', metronomeEnabled: true, metronomeVolume: 0.55, beatsPerLine: 4, annotations: [], timestamps: [], updatedAt: Date.now() };
     removeAudio(); updateEditorFromState(); persist(true); $('libraryBackdrop').hidden = true; setMode('write'); $('songTitle').select();
   }
 
@@ -549,18 +647,27 @@
     if (localStorage.getItem('ves-tip-dismissed')) $('selectionTip').hidden = true;
     $('closeNote').addEventListener('click', closeAnnotation); $('cancelNote').addEventListener('click', closeAnnotation); $('saveNote').addEventListener('click', saveAnnotation); $('deleteNote').addEventListener('click', deleteAnnotation);
     $('noteBackdrop').addEventListener('click', event => { if (event.target === $('noteBackdrop')) closeAnnotation(); });
-    document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => { $('bpmInput').value = clamp(Number($('bpmInput').value) + Number(button.dataset.step), 40, 240); $('bpmInput').dispatchEvent(new Event('change')); }));
-    $('bpmInput').addEventListener('change', () => { state.bpm = clamp(Number($('bpmInput').value) || 76, 40, 240); $('bpmInput').value = state.bpm; persist(); updateSyncSummary(); });
+    document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => setBpm(Number($('bpmInput').value) + Number(button.dataset.step))));
+    $('bpmInput').addEventListener('change', () => setBpm($('bpmInput').value));
+    $('meterInput').addEventListener('change', () => setMeter($('meterInput').value));
+    $('metronomeEnabled').addEventListener('change', () => setMetronomeEnabled($('metronomeEnabled').checked));
+    $('metronomeVolume').addEventListener('input', () => setMetronomeVolume($('metronomeVolume').value));
     $('beatsInput').addEventListener('change', () => { state.beatsPerLine = Number($('beatsInput').value); persist(); });
     $('chooseAudio').addEventListener('click', () => $('audioFile').click()); $('audioFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) loadAudio(file); event.target.value = ''; }); $('removeAudio').addEventListener('click', removeAudio);
     $('audioPlayer').addEventListener('loadedmetadata', () => { $('audioDuration').textContent = `${formatTime($('audioPlayer').duration)} · Lista para sincronizar`; updateTransport(); });
-    $('startRehearsal').addEventListener('click', enterRehearsal); $('exitRehearsal').addEventListener('click', () => setMode('prepare')); $('rehearsalSettings').addEventListener('click', () => setMode('prepare'));
+    $('audioPlayer').addEventListener('play', () => { if (!rehearsal.playing) startMetronome(); });
+    $('audioPlayer').addEventListener('pause', () => { if (!rehearsal.playing) stopMetronome(); });
+    $('startRehearsal').addEventListener('click', enterRehearsal); $('exitRehearsal').addEventListener('click', () => setMode('prepare')); $('rehearsalSettings').addEventListener('click', openMetronomeSettings);
+    $('closeMetronome').addEventListener('click', closeMetronomeSettings); $('metronomeBackdrop').addEventListener('click', event => { if (event.target === $('metronomeBackdrop')) closeMetronomeSettings(); });
+    $('liveBpmDown').addEventListener('click', () => setBpm(state.bpm - 1)); $('liveBpmUp').addEventListener('click', () => setBpm(state.bpm + 1));
+    $('liveBpm').addEventListener('change', () => setBpm($('liveBpm').value)); $('liveMeter').addEventListener('change', () => setMeter($('liveMeter').value));
+    $('liveMetronomeEnabled').addEventListener('change', () => setMetronomeEnabled($('liveMetronomeEnabled').checked)); $('liveVolume').addEventListener('input', () => setMetronomeVolume($('liveVolume').value));
     $('playPause').addEventListener('click', toggleRehearsal); $('previousLine').addEventListener('click', () => moveLine(-1)); $('nextLine').addEventListener('click', () => moveLine(1));
     $('rehearsalFullscreen').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => showToast('Pantalla completa no disponible')));
     $('libraryButton').addEventListener('click', () => { renderLibrary(); $('libraryBackdrop').hidden = false; }); $('closeLibrary').addEventListener('click', () => $('libraryBackdrop').hidden = true); $('libraryBackdrop').addEventListener('click', event => { if (event.target === $('libraryBackdrop')) $('libraryBackdrop').hidden = true; });
     $('newSong').addEventListener('click', createNewSong); $('exportSong').addEventListener('click', exportCurrent); $('importSong').addEventListener('click', () => $('importFile').click()); $('importFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSong(file); event.target.value = ''; });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { if (!$('noteBackdrop').hidden) closeAnnotation(); else if (!$('libraryBackdrop').hidden) $('libraryBackdrop').hidden = true; }
+      if (event.key === 'Escape') { if (!$('noteBackdrop').hidden) closeAnnotation(); else if (!$('libraryBackdrop').hidden) $('libraryBackdrop').hidden = true; else if (!$('metronomeBackdrop').hidden) closeMetronomeSettings(); }
       const rehearsing = !document.querySelector('[data-panel="rehearse"]').hidden;
       if (rehearsing && event.code === 'Space' && !['INPUT', 'TEXTAREA', 'BUTTON'].includes(document.activeElement?.tagName)) { event.preventDefault(); toggleRehearsal(); }
       if (rehearsing && event.key === 'ArrowUp') { event.preventDefault(); moveLine(-1); }
