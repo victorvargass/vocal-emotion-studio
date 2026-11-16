@@ -30,7 +30,7 @@
   let lines = [], tokens = [], selection = null, anchor = null, editingId = null;
   let mobileSelecting = false, mobileStart = null;
   let noteDraft = { emotion: '', dynamic: 'Natural', action: 'Ninguno' };
-  let audioUrl = null, audioFileName = '', audioFileData = null, syncPosition = 0;
+  let audioUrl = null, audioFileName = '', audioFileData = null, syncPosition = 0, tempoAnalysisId = 0;
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
   let metronome = { context: null, timer: 0, nextTime: 0, beat: 0 };
   let pitchEngine = { source: null, effect: null, ready: false, failed: false };
@@ -110,6 +110,11 @@
   function formatTime(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
     return `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+  }
+  function formatMarkerTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+    const minutes = Math.floor(seconds / 60), wholeSeconds = Math.floor(seconds % 60), tenths = Math.floor((seconds % 1) * 10);
+    return `${minutes}:${String(wholeSeconds).padStart(2, '0')}.${tenths}`;
   }
   function showToast(message) {
     $('toast').textContent = message;
@@ -198,8 +203,8 @@
         const sync = document.createElement('button');
         const time = state.timestamps[line.lineIndex];
         sync.className = `line-sync${Number.isFinite(time) ? ' synced' : ''}`;
-        sync.textContent = Number.isFinite(time) ? `✓ ${formatTime(time)}` : 'Marcar aquí';
-        sync.title = Number.isFinite(time) ? 'Actualizar marca al tiempo actual' : 'Sincronizar esta línea con el audio';
+        sync.textContent = Number.isFinite(time) ? `Entrada ${formatMarkerTime(time)}` : 'Marcar entrada';
+        sync.title = Number.isFinite(time) ? 'Abrir esta entrada para modificarla o borrarla' : 'Elegir cuándo comienza esta línea';
         sync.addEventListener('click', event => markLineTime(line.lineIndex, event));
         row.appendChild(sync);
       }
@@ -347,22 +352,24 @@
     if (event.shiftKey && Number.isFinite(state.timestamps[lineIndex])) {
       state.timestamps[lineIndex] = null; renderScore(); persist(); updateSyncSummary(); return;
     }
-    state.timestamps[lineIndex] = Number($('audioPlayer').currentTime.toFixed(2));
-    renderScore(); persist(); updateSyncSummary(); showToast(`Línea marcada en ${formatTime(state.timestamps[lineIndex])}`);
+    openSyncStudio(lineIndex);
   }
 
   function updateSyncSummary() {
-    const marked = state.timestamps.filter(Number.isFinite).length;
+    const playable = nonEmptyLines(), marked = playable.filter(index => Number.isFinite(state.timestamps[index])).length;
     $('syncSummary').textContent = audioUrl && marked ? `${marked} ${marked === 1 ? 'línea sincronizada' : 'líneas sincronizadas'}` : `Avance a ${state.bpm} BPM`;
+    $('resetSyncMarks').disabled = marked === 0;
+    $('completeSyncMarks').disabled = marked === 0 || marked === playable.length;
   }
 
-  function openSyncStudio() {
+  function openSyncStudio(targetLineIndex = null) {
     if (!audioUrl) { showToast('Primero carga una pista'); return; }
     const playable = nonEmptyLines();
     if (!playable.length) { showToast('La canción todavía no tiene letra'); return; }
+    const requestedPosition = targetLineIndex === null ? -1 : playable.indexOf(targetLineIndex);
     const firstUnmarked = playable.findIndex(index => !Number.isFinite(state.timestamps[index]));
-    syncPosition = firstUnmarked >= 0 ? firstUnmarked : 0;
-    $('syncBackdrop').hidden = false; updateSyncView(false); updateSyncTransport();
+    syncPosition = requestedPosition >= 0 ? requestedPosition : (firstUnmarked >= 0 ? firstUnmarked : 0);
+    $('syncBackdrop').hidden = false; updateSyncView(requestedPosition >= 0); updateSyncTransport();
   }
 
   function closeSyncStudio() {
@@ -380,13 +387,13 @@
     $('syncRemoveMark').hidden = !Number.isFinite(markedAt);
     $('syncMark').classList.toggle('marked', Number.isFinite(markedAt));
     $('syncMark').querySelector('span').textContent = Number.isFinite(markedAt) ? 'Actualizar entrada' : 'Marcar entrada';
-    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatTime(markedAt)}` : 'Pulsa cuando comience esta línea';
+    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatMarkerTime(markedAt)} · puedes moverla o borrarla` : 'Pulsa cuando comience esta línea';
     if (seekToMark && Number.isFinite(markedAt)) $('audioPlayer').currentTime = markedAt;
   }
 
   function updateSyncTransport() {
     const audio = $('audioPlayer'), duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-    $('syncCurrentTime').textContent = formatTime(audio.currentTime); $('syncTotalTime').textContent = formatTime(duration);
+    $('syncCurrentTime').textContent = formatMarkerTime(audio.currentTime); $('syncTotalTime').textContent = formatTime(duration);
     $('syncSeek').max = duration || 1; $('syncSeek').value = Math.min(audio.currentTime, duration || 0);
     $('syncPlayPause').textContent = audio.paused ? '▶' : 'Ⅱ'; $('syncPlayPause').ariaLabel = audio.paused ? 'Reproducir pista' : 'Pausar pista';
   }
@@ -398,6 +405,12 @@
 
   function moveSyncLine(direction) {
     syncPosition += direction; updateSyncView(true);
+  }
+
+  function nudgeSyncTime(amount) {
+    const duration = Number.isFinite($('audioPlayer').duration) ? $('audioPlayer').duration : Infinity;
+    $('audioPlayer').currentTime = clamp($('audioPlayer').currentTime + amount, 0, duration);
+    updateSyncTransport();
   }
 
   function markCurrentSyncLine() {
@@ -413,6 +426,38 @@
     const lineIndex = nonEmptyLines()[syncPosition];
     if (lineIndex === undefined) return;
     state.timestamps[lineIndex] = null; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+  }
+
+  function completeSyncMarks() {
+    const playable = nonEmptyLines();
+    const anchors = playable.map((lineIndex, position) => ({ lineIndex, position, time: state.timestamps[lineIndex] })).filter(anchor => Number.isFinite(anchor.time));
+    if (!anchors.length) { showToast('Marca al menos una línea primero'); return; }
+
+    const learnedSteps = [];
+    for (let index = 1; index < anchors.length; index += 1) {
+      const distance = anchors[index].position - anchors[index - 1].position;
+      const duration = anchors[index].time - anchors[index - 1].time;
+      if (distance > 0 && duration > 0) learnedSteps.push(duration / distance);
+    }
+    learnedSteps.sort((a, b) => a - b);
+    const step = learnedSteps.length ? learnedSteps[Math.floor(learnedSteps.length / 2)] : lineDuration();
+    const audioDuration = Number.isFinite($('audioPlayer').duration) ? $('audioPlayer').duration : Infinity;
+    const setEstimated = (position, time) => {
+      const lineIndex = playable[position];
+      if (!Number.isFinite(state.timestamps[lineIndex])) state.timestamps[lineIndex] = Number(clamp(time, 0, audioDuration).toFixed(2));
+    };
+
+    for (let anchorIndex = 1; anchorIndex < anchors.length; anchorIndex += 1) {
+      const previous = anchors[anchorIndex - 1], next = anchors[anchorIndex];
+      const segmentStep = (next.time - previous.time) / (next.position - previous.position);
+      for (let position = previous.position + 1; position < next.position; position += 1) setEstimated(position, previous.time + segmentStep * (position - previous.position));
+    }
+    const first = anchors[0], last = anchors[anchors.length - 1];
+    for (let position = first.position - 1; position >= 0; position -= 1) setEstimated(position, first.time - step * (first.position - position));
+    for (let position = last.position + 1; position < playable.length; position += 1) setEstimated(position, last.time + step * (position - last.position));
+
+    persist(); renderScore(); updateSyncSummary();
+    showToast(`Marcas completadas usando ${step.toFixed(1)} s por línea`);
   }
 
   function clearAllSyncMarks() {
@@ -432,6 +477,7 @@
 
   function removeAudio() {
     if (!$('syncBackdrop').hidden) closeSyncStudio();
+    tempoAnalysisId += 1;
     $('audioPlayer').pause();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = null; audioFileName = ''; audioFileData = null; $('audioPlayer').removeAttribute('src');
@@ -440,6 +486,7 @@
 
   async function detectTempo(file = audioFileData) {
     if (!file) return;
+    const analysisId = ++tempoAnalysisId;
     const button = $('detectTempo'); button.disabled = true; button.textContent = 'Analizando…';
     $('tempoStatus').textContent = 'Escuchando el pulso de la pista…';
     let context;
@@ -447,16 +494,20 @@
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error('AudioContext no disponible');
       context = new AudioContextClass();
-      const buffer = await context.decodeAudioData(await file.arrayBuffer());
+      const analysis = (async () => context.decodeAudioData(await file.arrayBuffer()))();
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('El análisis tardó demasiado')), 15000));
+      const buffer = await Promise.race([analysis, timeout]);
+      if (analysisId !== tempoAnalysisId || file !== audioFileData) return;
       const bpm = estimateTempo(buffer);
       if (!bpm) throw new Error('No se encontró un pulso estable');
       setBpm(bpm);
       $('tempoStatus').textContent = `Tempo detectado: ${bpm} BPM · estimado`;
       showToast(`Tempo estimado: ${bpm} BPM`);
     } catch (error) {
-      $('tempoStatus').textContent = 'No pude detectar un pulso claro. Puedes ajustar el BPM manualmente.';
+      if (analysisId === tempoAnalysisId) $('tempoStatus').textContent = error.message.includes('tardó') ? 'El análisis tardó demasiado. Ajusta el BPM manualmente o intenta de nuevo.' : 'No pude detectar un pulso claro. Puedes ajustar el BPM manualmente.';
     } finally {
-      context?.close?.(); button.disabled = false; button.textContent = 'Detectar BPM';
+      context?.close?.();
+      if (analysisId === tempoAnalysisId) { button.disabled = false; button.textContent = 'Detectar BPM'; }
     }
   }
 
@@ -872,7 +923,8 @@
     $('audioPlayer').addEventListener('pause', () => { updateSyncTransport(); if (!rehearsal.playing) stopMetronome(); });
     $('closeSync').addEventListener('click', closeSyncStudio); $('finishSync').addEventListener('click', closeSyncStudio); $('syncBackdrop').addEventListener('click', event => { if (event.target === $('syncBackdrop')) closeSyncStudio(); });
     $('syncPlayPause').addEventListener('click', toggleSyncPlayback); $('syncPrevious').addEventListener('click', () => moveSyncLine(-1)); $('syncNext').addEventListener('click', () => moveSyncLine(1));
-    $('syncMark').addEventListener('click', markCurrentSyncLine); $('syncRemoveMark').addEventListener('click', removeCurrentSyncMark); $('clearSync').addEventListener('click', clearAllSyncMarks);
+    $('syncNudgeBack').addEventListener('click', () => nudgeSyncTime(-0.1)); $('syncNudgeForward').addEventListener('click', () => nudgeSyncTime(0.1));
+    $('syncMark').addEventListener('click', markCurrentSyncLine); $('syncRemoveMark').addEventListener('click', removeCurrentSyncMark); $('clearSync').addEventListener('click', clearAllSyncMarks); $('resetSyncMarks').addEventListener('click', clearAllSyncMarks); $('completeSyncMarks').addEventListener('click', completeSyncMarks);
     $('syncSeek').addEventListener('input', () => { $('audioPlayer').currentTime = Number($('syncSeek').value); updateSyncTransport(); });
     $('startRehearsal').addEventListener('click', enterRehearsal); $('exitRehearsal').addEventListener('click', () => setMode('prepare')); $('rehearsalSettings').addEventListener('click', openMetronomeSettings);
     $('closeMetronome').addEventListener('click', closeMetronomeSettings); $('metronomeBackdrop').addEventListener('click', event => { if (event.target === $('metronomeBackdrop')) closeMetronomeSettings(); });

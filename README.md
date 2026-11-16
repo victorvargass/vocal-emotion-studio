@@ -11,7 +11,8 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 - Escuchar un metrónomo durante la cuenta y la canción, con tempo, compás y volumen ajustables en vivo.
 - Cargar una pista de karaoke local y marcar el inicio de cada línea mientras suena.
 - Detectar automáticamente un BPM estimado al cargar la pista.
-- Sincronizar la letra línea por línea con un flujo guiado para que el teleprompter siga la música.
+- Sincronizar la letra línea por línea con un reproductor ancho, ajuste fino de 0,1 segundos y edición o borrado de las marcas temporales.
+- Completar automáticamente las entradas que faltan interpolando y prolongando el ritmo de las marcas manuales.
 - Transponer la pista entre −6 y +6 semitonos sin cambiar el tempo.
 - Guardar automáticamente varias canciones en el navegador e importarlas o exportarlas en JSON.
 - Usar el modo ensayo en pantalla completa, reiniciarlo desde `0:00` y controlarlo con espacio y las flechas arriba/abajo.
@@ -23,7 +24,7 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 3. Ajusta el BPM y la duración estimada de cada línea.
 4. Elige el compás, activa el metrónomo y ajusta su volumen.
 5. Opcionalmente, carga una pista. La app estima su BPM y permite subirla o bajarla por semitonos.
-6. Pulsa **Sincronizar letra**, reproduce la pista y marca la entrada de cada línea. La app avanza automáticamente a la siguiente.
+6. Pulsa **Sincronizar letra**, mueve la barra al instante exacto y marca la entrada de cada línea. Toca una marca para editarla o usa **Borrar marcas** para reiniciar la sincronización.
 7. Entra a **Ensayar**. Sin marcas de audio la letra sigue el BPM; con marcas, sigue exactamente la pista. El botón del metrónomo permite cambiar la tonalidad y el pulso sin detener la reproducción.
 
 La pista de audio se usa solo en la sesión actual y no se guarda ni se sube a ningún servidor. Las marcas de tiempo sí se conservan, por lo que al volver solo hay que cargar la misma pista.
