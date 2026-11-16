@@ -298,7 +298,7 @@
   function setSelection(a, b) {
     selection = { start: Math.min(a, b), end: Math.max(a, b) };
     $('openNote').disabled = false;
-    $('openNote').textContent = `+ Indicar “${phrase(selection.start, selection.end).slice(0, 24)}${phrase(selection.start, selection.end).length > 24 ? '…' : ''}”`;
+    $('openNote').textContent = `Indicar “${phrase(selection.start, selection.end).slice(0, 24)}${phrase(selection.start, selection.end).length > 24 ? '…' : ''}”`;
     updateSelectionControls();
     renderScore();
   }
@@ -307,7 +307,7 @@
     selection = null; anchor = null; mobileSelecting = false; mobileStart = null;
     document.body.classList.remove('mobile-range-selecting');
     $('openNote').disabled = true;
-    $('openNote').textContent = '+ Añadir indicación';
+    $('openNote').textContent = 'Añadir indicación';
     $('mobileSelectionGuide').hidden = true;
     updateSelectionControls();
     window.getSelection()?.removeAllRanges();
