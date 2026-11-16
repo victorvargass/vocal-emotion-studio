@@ -446,7 +446,7 @@
     const audio = $('audioPlayer'), duration = Number.isFinite(audio.duration) ? audio.duration : 0;
     $('syncCurrentTime').textContent = formatMarkerTime(audio.currentTime); $('syncTotalTime').textContent = formatTime(duration);
     $('syncSeek').max = duration || 1; $('syncSeek').value = Math.min(audio.currentTime, duration || 0);
-    $('syncPlayPause').textContent = audio.paused ? '▶' : 'Ⅱ'; $('syncPlayPause').ariaLabel = audio.paused ? 'Reproducir pista' : 'Pausar pista';
+    $('syncPlayPause').classList.toggle('is-playing', !audio.paused); $('syncPlayPause').ariaLabel = audio.paused ? 'Reproducir pista' : 'Pausar pista';
   }
 
   function toggleSyncPlayback() {
@@ -839,13 +839,13 @@
     resumePitchAudio();
     if (audioUrl) $('audioPlayer').play().catch(() => showToast('Pulsa play nuevamente para iniciar el audio'));
     startMetronome();
-    $('playPause').textContent = 'Ⅱ'; $('playPause').ariaLabel = 'Pausar ensayo';
+    $('playPause').classList.add('is-playing'); $('playPause').ariaLabel = 'Pausar ensayo';
     cancelAnimationFrame(rehearsal.raf); rehearsal.raf = requestAnimationFrame(tick);
   }
 
   function pauseRehearsal() {
     rehearsal.playing = false; cancelAnimationFrame(rehearsal.raf); $('audioPlayer').pause(); stopMetronome();
-    $('playPause').textContent = '▶'; $('playPause').ariaLabel = 'Continuar ensayo';
+    $('playPause').classList.remove('is-playing'); $('playPause').ariaLabel = 'Continuar ensayo';
   }
 
   function stopRehearsal() {
