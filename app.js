@@ -21,6 +21,7 @@
     meter: '4/4',
     metronomeEnabled: true,
     metronomeVolume: 0.55,
+    semitones: 0,
     beatsPerLine: 4,
     annotations: [],
     timestamps: [],
@@ -32,6 +33,7 @@
   let audioUrl = null, audioFileName = '';
   let rehearsal = { playing: false, line: 0, elapsed: 0, startedAt: 0, raf: 0, countTimer: 0 };
   let metronome = { context: null, timer: 0, nextTime: 0, beat: 0 };
+  let pitchEngine = { source: null, effect: null, ready: false, failed: false };
   let saveTimer = 0, toastTimer = 0;
 
   function parseLyrics(text) {
@@ -71,6 +73,7 @@
       meter: ['2/4', '3/4', '4/4', '6/8'].includes(raw.meter) ? raw.meter : '4/4',
       metronomeEnabled: raw.metronomeEnabled !== false,
       metronomeVolume: clamp(Number.isFinite(Number(raw.metronomeVolume)) ? Number(raw.metronomeVolume) : 0.55, 0, 1),
+      semitones: clamp(Math.round(Number(raw.semitones) || 0), -6, 6),
       beatsPerLine: [2, 4, 8, 16].includes(Number(raw.beatsPerLine)) ? Number(raw.beatsPerLine) : 4,
       annotations,
       timestamps: Array.isArray(raw.timestamps) ? raw.timestamps.map(value => Number.isFinite(Number(value)) ? Number(value) : null) : [],
@@ -124,6 +127,7 @@
     $('metronomeEnabled').checked = state.metronomeEnabled;
     $('metronomeVolume').value = Math.round(state.metronomeVolume * 100);
     $('metronomeVolumeValue').textContent = `${Math.round(state.metronomeVolume * 100)}%`;
+    syncPitchControls();
     $('beatsInput').value = state.beatsPerLine;
     syncMetronomeControls();
     parseLyrics(state.lyrics);
@@ -357,6 +361,7 @@
     audioUrl = URL.createObjectURL(file); audioFileName = file.name;
     $('audioPlayer').src = audioUrl; $('audioName').textContent = file.name;
     $('audioEmpty').hidden = true; $('audioLoaded').hidden = false;
+    setupPitchProcessing(); syncPitchControls();
     updateSyncSummary(); showToast('Pista cargada. Ahora puedes marcar las líneas.');
   }
 
@@ -364,7 +369,53 @@
     $('audioPlayer').pause();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = null; audioFileName = ''; $('audioPlayer').removeAttribute('src');
-    $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; updateSyncSummary();
+    $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; syncPitchControls(); updateSyncSummary();
+  }
+
+  function pitchDescription(value = state.semitones) {
+    if (value === 0) return 'Tono original';
+    const amount = Math.abs(value), direction = value > 0 ? 'arriba' : 'abajo';
+    return `${amount} ${amount === 1 ? 'semitono' : 'semitonos'} ${direction}`;
+  }
+
+  function syncPitchControls() {
+    if (pitchEngine.effect) pitchEngine.effect.pitch = state.semitones;
+    const signed = state.semitones > 0 ? `+${state.semitones}` : String(state.semitones);
+    $('pitchSlider').value = state.semitones; $('pitchValue').textContent = signed; $('pitchLabel').textContent = pitchDescription();
+    $('livePitch').value = state.semitones; $('livePitchLabel').textContent = audioUrl ? pitchDescription() : 'Carga una pista para usarlo';
+    for (const id of ['livePitchDown', 'livePitch', 'livePitchUp']) $(id).disabled = !audioUrl;
+  }
+
+  function setupPitchProcessing() {
+    if (pitchEngine.ready || pitchEngine.failed || !window.Tone) {
+      if (!window.Tone) { pitchEngine.failed = true; $('audioLoaded').dataset.pitchEngine = 'unavailable'; }
+      return pitchEngine.ready;
+    }
+    try {
+      const context = Tone.getContext();
+      pitchEngine.source = context.createMediaElementSource($('audioPlayer'));
+      pitchEngine.effect = new Tone.PitchShift(state.semitones).toDestination();
+      pitchEngine.effect.windowSize = 0.08;
+      Tone.connect(pitchEngine.source, pitchEngine.effect);
+      pitchEngine.ready = true; $('audioLoaded').dataset.pitchEngine = 'ready';
+      return true;
+    } catch (error) {
+      console.error('No se pudo iniciar el cambio de tonalidad', error);
+      pitchEngine.failed = true; $('audioLoaded').dataset.pitchEngine = 'failed'; return false;
+    }
+  }
+
+  function resumePitchAudio() {
+    if (!pitchEngine.ready) setupPitchProcessing();
+    if (window.Tone) Tone.start().catch(() => {});
+  }
+
+  function setPitch(value) {
+    state.semitones = clamp(Math.round(Number(value) || 0), -6, 6);
+    if (pitchEngine.effect) pitchEngine.effect.pitch = state.semitones;
+    syncPitchControls(); persist();
+    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = rehearsalMetaText();
+    if (state.semitones !== 0 && !pitchEngine.ready) showToast('No pude activar el cambio de tono en este navegador');
   }
 
   function meterBeats() { return Number(state.meter.split('/')[0]) || 4; }
@@ -426,16 +477,21 @@
     updateMetronomeButton(); updateSyncSummary();
   }
 
+  function rehearsalMetaText() {
+    const pitchText = `${state.semitones > 0 ? '+' : ''}${state.semitones} ST`;
+    return audioUrl ? `${state.bpm} BPM · ${state.meter} · ${pitchText} · Siguiendo ${audioFileName}` : `${state.bpm} BPM · ${state.meter} · ${state.beatsPerLine} pulsos por línea`;
+  }
+
   function setBpm(value) {
     state.bpm = clamp(Number(value) || 76, 40, 240);
     syncMetronomeControls(); restartMetronomeIfPlaying(); persist();
-    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = `${state.bpm} BPM · ${state.meter}${audioUrl ? ` · Siguiendo ${audioFileName}` : ` · ${state.beatsPerLine} pulsos por línea`}`;
+    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = rehearsalMetaText();
   }
 
   function setMeter(value) {
     state.meter = ['2/4', '3/4', '4/4', '6/8'].includes(value) ? value : '4/4';
     syncMetronomeControls(); restartMetronomeIfPlaying(); persist();
-    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = `${state.bpm} BPM · ${state.meter}${audioUrl ? ` · Siguiendo ${audioFileName}` : ` · ${state.beatsPerLine} pulsos por línea`}`;
+    if (!document.querySelector('[data-panel="rehearse"]').hidden) $('rehearsalMeta').textContent = rehearsalMetaText();
   }
 
   function setMetronomeEnabled(enabled) {
@@ -461,7 +517,7 @@
     rehearsal.line = nonEmptyLines()[0] ?? 0; rehearsal.elapsed = 0;
     $('rehearsalTitle').textContent = state.title;
     const synced = audioUrl && state.timestamps.filter(Number.isFinite).length > 0;
-    $('rehearsalMeta').textContent = synced ? `${state.bpm} BPM · ${state.meter} · Siguiendo ${audioFileName}` : `${state.bpm} BPM · ${state.meter} · ${state.beatsPerLine} pulsos por línea`;
+    $('rehearsalMeta').textContent = synced ? rehearsalMetaText() : `${state.bpm} BPM · ${state.meter} · ${state.beatsPerLine} pulsos por línea`;
     renderTeleprompter(); updateTransport();
     setTimeout(() => focusTeleLine(rehearsal.line, false), 40);
   }
@@ -517,6 +573,7 @@
     const syncedAudio = audioUrl && state.timestamps.filter(Number.isFinite).length;
     if (syncedAudio && $('audioPlayer').currentTime > 0) { playRehearsal(); return; }
     let count = meterBeats();
+    resumePitchAudio();
     startMetronome();
     $('countIn').hidden = false; $('countIn').querySelector('strong').textContent = count;
     const beatMs = 60000 / state.bpm;
@@ -530,6 +587,7 @@
 
   function playRehearsal() {
     rehearsal.playing = true; rehearsal.startedAt = performance.now() - rehearsal.elapsed * 1000;
+    resumePitchAudio();
     if (audioUrl) $('audioPlayer').play().catch(() => showToast('Pulsa play nuevamente para iniciar el audio'));
     startMetronome();
     $('playPause').textContent = 'Ⅱ'; $('playPause').ariaLabel = 'Pausar ensayo';
@@ -598,7 +656,7 @@
   }
 
   function createNewSong() {
-    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, meter: '4/4', metronomeEnabled: true, metronomeVolume: 0.55, beatsPerLine: 4, annotations: [], timestamps: [], updatedAt: Date.now() };
+    state = { id: `song-${Date.now()}`, title: 'Nueva canción', lyrics: '', bpm: 76, meter: '4/4', metronomeEnabled: true, metronomeVolume: 0.55, semitones: 0, beatsPerLine: 4, annotations: [], timestamps: [], updatedAt: Date.now() };
     removeAudio(); updateEditorFromState(); persist(true); $('libraryBackdrop').hidden = true; setMode('write'); $('songTitle').select();
   }
 
@@ -654,12 +712,14 @@
     $('metronomeVolume').addEventListener('input', () => setMetronomeVolume($('metronomeVolume').value));
     $('beatsInput').addEventListener('change', () => { state.beatsPerLine = Number($('beatsInput').value); persist(); });
     $('chooseAudio').addEventListener('click', () => $('audioFile').click()); $('audioFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) loadAudio(file); event.target.value = ''; }); $('removeAudio').addEventListener('click', removeAudio);
+    $('pitchDown').addEventListener('click', () => setPitch(state.semitones - 1)); $('pitchUp').addEventListener('click', () => setPitch(state.semitones + 1)); $('pitchSlider').addEventListener('input', () => setPitch($('pitchSlider').value));
     $('audioPlayer').addEventListener('loadedmetadata', () => { $('audioDuration').textContent = `${formatTime($('audioPlayer').duration)} · Lista para sincronizar`; updateTransport(); });
-    $('audioPlayer').addEventListener('play', () => { if (!rehearsal.playing) startMetronome(); });
+    $('audioPlayer').addEventListener('play', () => { resumePitchAudio(); if (!rehearsal.playing) startMetronome(); });
     $('audioPlayer').addEventListener('pause', () => { if (!rehearsal.playing) stopMetronome(); });
     $('startRehearsal').addEventListener('click', enterRehearsal); $('exitRehearsal').addEventListener('click', () => setMode('prepare')); $('rehearsalSettings').addEventListener('click', openMetronomeSettings);
     $('closeMetronome').addEventListener('click', closeMetronomeSettings); $('metronomeBackdrop').addEventListener('click', event => { if (event.target === $('metronomeBackdrop')) closeMetronomeSettings(); });
     $('liveBpmDown').addEventListener('click', () => setBpm(state.bpm - 1)); $('liveBpmUp').addEventListener('click', () => setBpm(state.bpm + 1));
+    $('livePitchDown').addEventListener('click', () => setPitch(state.semitones - 1)); $('livePitchUp').addEventListener('click', () => setPitch(state.semitones + 1));
     $('liveBpm').addEventListener('change', () => setBpm($('liveBpm').value)); $('liveMeter').addEventListener('change', () => setMeter($('liveMeter').value));
     $('liveMetronomeEnabled').addEventListener('change', () => setMetronomeEnabled($('liveMetronomeEnabled').checked)); $('liveVolume').addEventListener('input', () => setMetronomeVolume($('liveVolume').value));
     $('playPause').addEventListener('click', toggleRehearsal); $('previousLine').addEventListener('click', () => moveLine(-1)); $('nextLine').addEventListener('click', () => moveLine(1));

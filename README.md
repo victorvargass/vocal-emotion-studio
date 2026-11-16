@@ -10,6 +10,7 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 - Ensayar con cuenta de entrada y avance automático según BPM y pulsos por línea.
 - Escuchar un metrónomo durante la cuenta y la canción, con tempo, compás y volumen ajustables en vivo.
 - Cargar una pista de karaoke local y marcar el inicio de cada línea mientras suena.
+- Transponer la pista entre −6 y +6 semitonos sin cambiar el tempo.
 - Guardar automáticamente varias canciones en el navegador e importarlas o exportarlas en JSON.
 - Usar el modo ensayo en pantalla completa y controlarlo con espacio y las flechas arriba/abajo.
 
@@ -19,8 +20,8 @@ Una partitura emocional y teleprompter para preparar canciones antes de cantarla
 2. En **Preparar**, selecciona una frase y añade una indicación. En celular pulsa **Seleccionar frase** y toca la primera y la última palabra; en computador puedes arrastrar o usar Mayús + clic.
 3. Ajusta el BPM y la duración estimada de cada línea.
 4. Elige el compás, activa el metrónomo y ajusta su volumen.
-5. Opcionalmente, carga una pista. Reprodúcela y pulsa **Marcar aquí** cuando empiece cada línea.
-6. Entra a **Ensayar**. Sin marcas de audio la letra sigue el BPM; con marcas, sigue la pista. El botón **Metrónomo** permite cambiar sus ajustes sin detener la reproducción.
+5. Opcionalmente, carga una pista. Puedes subirla o bajarla por semitonos y marcar el inicio de cada línea mientras suena.
+6. Entra a **Ensayar**. Sin marcas de audio la letra sigue el BPM; con marcas, sigue la pista. El botón **Metrónomo** permite cambiar la tonalidad y el pulso sin detener la reproducción.
 
 La pista de audio se usa solo en la sesión actual y no se guarda ni se sube a ningún servidor. Las marcas de tiempo sí se conservan, por lo que al volver solo hay que cargar la misma pista.
 
@@ -34,4 +35,4 @@ python -m http.server 4173
 
 Luego abre `http://127.0.0.1:4173`.
 
-No requiere compilación, dependencias ni backend y funciona en GitHub Pages.
+No requiere compilación ni backend y funciona en GitHub Pages. El cambio de tonalidad usa Tone.js 15.1.22 cargado desde jsDelivr.

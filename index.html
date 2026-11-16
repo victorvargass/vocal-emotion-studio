@@ -54,7 +54,7 @@ queda una luz dentro de mí</textarea>
             <div class="metronome-control"><label class="toggle-row" for="metronomeEnabled"><span><strong>Metrónomo</strong><small>Suena junto a la canción</small></span><input id="metronomeEnabled" type="checkbox" checked><i aria-hidden="true"></i></label><label class="volume-row" for="metronomeVolume"><span>Volumen</span><input id="metronomeVolume" type="range" min="0" max="100" value="55"><output id="metronomeVolumeValue">55%</output></label></div>
             <div class="audio-box" id="audioBox">
               <div class="audio-empty" id="audioEmpty"><span class="audio-icon" aria-hidden="true">♪</span><div><strong>Añadir pista de karaoke</strong><small>El audio no sale de tu dispositivo</small></div><button class="soft-button" id="chooseAudio">Elegir audio</button><input id="audioFile" type="file" accept="audio/*" hidden></div>
-              <div class="audio-loaded" id="audioLoaded" hidden><div class="audio-file-row"><span class="audio-icon">♪</span><div><strong id="audioName"></strong><small id="audioDuration">Lista para sincronizar</small></div><button class="icon-button small" id="removeAudio" aria-label="Quitar pista">×</button></div><audio id="audioPlayer" controls preload="metadata"></audio><p>Reproduce la pista y pulsa <strong>Marcar aquí</strong> en cada línea cuando comience.</p></div>
+              <div class="audio-loaded" id="audioLoaded" hidden><div class="audio-file-row"><span class="audio-icon">♪</span><div><strong id="audioName"></strong><small id="audioDuration">Lista para sincronizar</small></div><button class="icon-button small" id="removeAudio" aria-label="Quitar pista">×</button></div><audio id="audioPlayer" controls preload="metadata"></audio><div class="pitch-control"><div><strong>Tonalidad</strong><small id="pitchLabel">Tono original</small></div><span class="pitch-buttons"><button id="pitchDown" type="button" aria-label="Bajar un semitono">−</button><output id="pitchValue">0</output><button id="pitchUp" type="button" aria-label="Subir un semitono">+</button></span></div><input class="pitch-slider" id="pitchSlider" type="range" min="-6" max="6" step="1" value="0" aria-label="Semitonos de la pista"><p>Reproduce la pista y pulsa <strong>Marcar aquí</strong> en cada línea cuando comience.</p></div>
             </div>
             <button class="rehearse-cta" id="startRehearsal"><span class="play-icon">▶</span><span><strong>Ensayar canción</strong><small id="syncSummary">Avance a 76 BPM</small></span><span>→</span></button>
           </aside>
@@ -78,16 +78,17 @@ queda una luz dentro de mí</textarea>
   </div>
   <div class="sheet-backdrop" id="metronomeBackdrop" hidden>
     <section class="metronome-sheet" role="dialog" aria-modal="true" aria-labelledby="metronomeTitle">
-      <header><div><span class="eyebrow">Durante el ensayo</span><h2 id="metronomeTitle">Metrónomo</h2></div><button class="icon-button" id="closeMetronome" aria-label="Cerrar">×</button></header>
+      <header><div><span class="eyebrow">Durante el ensayo</span><h2 id="metronomeTitle">Audio y metrónomo</h2></div><button class="icon-button" id="closeMetronome" aria-label="Cerrar">×</button></header>
       <div class="live-metronome-grid">
+        <label for="livePitch"><span><strong>Tonalidad</strong><small id="livePitchLabel">Tono original</small></span><span class="live-number pitch-live-number"><button id="livePitchDown" type="button" aria-label="Bajar un semitono">−</button><input id="livePitch" type="number" min="-6" max="6" value="0" readonly><em>ST</em><button id="livePitchUp" type="button" aria-label="Subir un semitono">+</button></span></label>
         <label for="liveMetronomeEnabled"><span>Sonido</span><span class="live-switch"><input id="liveMetronomeEnabled" type="checkbox" checked><i></i></span></label>
         <label for="liveBpm"><span>Tempo</span><span class="live-number"><button id="liveBpmDown" type="button" aria-label="Bajar tempo">−</button><input id="liveBpm" type="number" min="40" max="240" value="76"><em>BPM</em><button id="liveBpmUp" type="button" aria-label="Subir tempo">+</button></span></label>
         <label for="liveMeter"><span>Compás</span><select id="liveMeter"><option value="2/4">2/4</option><option value="3/4">3/4</option><option value="4/4">4/4</option><option value="6/8">6/8</option></select></label>
         <label class="live-volume" for="liveVolume"><span>Volumen</span><input id="liveVolume" type="range" min="0" max="100" value="55"><output id="liveVolumeValue">55%</output></label>
       </div>
-      <p class="metronome-note">El pulso fuerte marca el comienzo de cada compás. Los cambios se aplican sin detener la canción.</p>
+      <p class="metronome-note">La tonalidad cambia por semitonos sin alterar el tempo. El pulso fuerte marca el comienzo de cada compás.</p>
     </section>
   </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div><script src="app.js"></script>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div><script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.js"></script><script src="app.js"></script>
 </body>
 </html>
