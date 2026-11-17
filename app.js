@@ -346,6 +346,7 @@
   function isMobileLayout() { return window.matchMedia('(max-width: 700px)').matches; }
 
   function updateSelectionControls() {
+    $('clearSelection').disabled = !selection && !mobileSelecting;
     if (!isMobileLayout()) { $('clearSelection').textContent = 'Limpiar selección'; return; }
     if (mobileSelecting) $('clearSelection').textContent = 'Cancelar selección';
     else if (selection) $('clearSelection').textContent = 'Cambiar selección';
@@ -783,6 +784,7 @@
 
   function enterRehearsal() {
     if (!tokens.length) { showToast('Escribe una letra antes de ensayar'); setMode('write'); return; }
+    stopRehearsal();
     document.querySelectorAll('.mode-panel').forEach(panel => { panel.hidden = panel.dataset.panel !== 'rehearse'; });
     document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === 'rehearse'));
     document.body.classList.remove('audio-dock-visible');
@@ -1050,7 +1052,7 @@
     $('liveMetronomeEnabled').addEventListener('change', () => setMetronomeEnabled($('liveMetronomeEnabled').checked)); $('liveVolume').addEventListener('input', () => setMetronomeVolume($('liveVolume').value));
     $('playPause').addEventListener('click', toggleRehearsal); $('restartSong').addEventListener('click', restartSong); $('previousLine').addEventListener('click', () => moveLine(-1)); $('nextLine').addEventListener('click', () => moveLine(1));
     $('rehearsalFullscreen').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => showToast('Pantalla completa no disponible')));
-    $('libraryButton').addEventListener('click', () => { renderLibrary(); $('libraryBackdrop').hidden = false; }); $('closeLibrary').addEventListener('click', () => $('libraryBackdrop').hidden = true); $('libraryBackdrop').addEventListener('click', event => { if (event.target === $('libraryBackdrop')) $('libraryBackdrop').hidden = true; });
+    $('libraryButton').addEventListener('click', () => { stopRehearsal(); renderLibrary(); $('libraryBackdrop').hidden = false; }); $('closeLibrary').addEventListener('click', () => $('libraryBackdrop').hidden = true); $('libraryBackdrop').addEventListener('click', event => { if (event.target === $('libraryBackdrop')) $('libraryBackdrop').hidden = true; });
     $('newSong').addEventListener('click', createNewSong); $('exportSong').addEventListener('click', exportCurrent); $('importSong').addEventListener('click', () => $('importFile').click()); $('importFile').addEventListener('change', event => { const file = event.target.files?.[0]; if (file) importSong(file); event.target.value = ''; });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape') { if (!$('noteBackdrop').hidden) closeAnnotation(); else if (!$('libraryBackdrop').hidden) $('libraryBackdrop').hidden = true; else if (!$('metronomeBackdrop').hidden) closeMetronomeSettings(); else if (!$('syncBackdrop').hidden) closeSyncStudio(); }
