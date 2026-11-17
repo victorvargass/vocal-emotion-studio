@@ -178,7 +178,7 @@
         word.textContent = token.word;
         if (marks.length) {
           word.style.setProperty('--mark-color', colorFor(marks.at(-1).emotion));
-          word.title = annotationLabel(marks.at(-1));
+          word.title = marks.length === 1 ? annotationLabel(marks[0]) : `${marks.length} indicaciones · selecciónala para añadir otra`;
         }
         word.addEventListener('click', event => handleWordClick(token.index, event));
         word.addEventListener('keydown', event => {
@@ -304,7 +304,7 @@
         selection = { start: index, end: index };
         $('openNote').disabled = true;
         $('mobileSelectionGuide').querySelector('.selection-step').textContent = '2';
-        $('mobileSelectionText').textContent = 'Ahora toca la última palabra de la frase';
+        $('mobileSelectionText').textContent = 'Toca la misma palabra o el final de la frase';
         updateSelectionControls(); renderScore();
       } else {
         setSelection(mobileStart, index);
@@ -320,8 +320,6 @@
       setSelection(anchor, index);
       return;
     }
-    const mark = [...state.annotations].reverse().find(item => item.start <= index && item.end >= index);
-    if (mark) { openAnnotation(mark); return; }
     anchor = index;
     setSelection(index, index);
   }
@@ -351,7 +349,7 @@
     if (!isMobileLayout()) { $('clearSelection').textContent = 'Limpiar selección'; return; }
     if (mobileSelecting) $('clearSelection').textContent = 'Cancelar selección';
     else if (selection) $('clearSelection').textContent = 'Cambiar selección';
-    else $('clearSelection').textContent = 'Seleccionar frase';
+    else $('clearSelection').textContent = 'Seleccionar palabras';
   }
 
   function beginMobileSelection() {
@@ -360,7 +358,7 @@
     $('openNote').disabled = true; $('openNote').textContent = '+ Añadir indicación';
     $('mobileSelectionGuide').hidden = false;
     $('mobileSelectionGuide').querySelector('.selection-step').textContent = '1';
-    $('mobileSelectionText').textContent = 'Toca la primera palabra de la frase';
+    $('mobileSelectionText').textContent = 'Toca una palabra para comenzar';
     window.getSelection()?.removeAllRanges();
     updateSelectionControls(); renderScore();
   }
@@ -416,7 +414,7 @@
   function saveAnnotation() {
     if (!selection) return;
     const mark = { id: editingId || `note-${Date.now()}`, ...selection, ...noteDraft, note: $('noteText').value.trim() };
-    state.annotations = state.annotations.filter(item => item.id !== editingId && (item.end < mark.start || item.start > mark.end));
+    state.annotations = state.annotations.filter(item => item.id !== editingId);
     state.annotations.push(mark);
     state.annotations.sort((a, b) => a.start - b.start);
     closeAnnotation(); clearSelection(); persist(); showToast('Indicación guardada');
@@ -1018,7 +1016,7 @@
       parseLyrics(state.lyrics); $('displayTitle').textContent = state.title; clearSelection(false); renderScore(); persist(); setMode('prepare');
     });
     $('lyricsScore').addEventListener('pointerup', () => setTimeout(captureNativeSelection, 20));
-    $('openNote').addEventListener('click', () => openAnnotation()); $('clearSelection').addEventListener('click', handleSelectionButton);
+    $('openNote').addEventListener('click', event => { event.stopPropagation(); openAnnotation(); }); $('clearSelection').addEventListener('click', event => { event.stopPropagation(); handleSelectionButton(); });
     $('cancelMobileSelection').addEventListener('click', () => clearSelection());
     $('dismissTip').addEventListener('click', () => { $('selectionTip').hidden = true; localStorage.setItem('ves-tip-dismissed', '1'); });
     if (localStorage.getItem('ves-tip-dismissed')) $('selectionTip').hidden = true;
