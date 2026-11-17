@@ -35,13 +35,13 @@ todavía siento tu partida
 
 Pero respiro y miro al frente
 queda una luz dentro de mí</textarea>
-          <div class="writing-footer"><span id="lyricsCount">0 líneas · 0 palabras</span><button class="primary-button" id="applyLyrics">Continuar a preparar <span>→</span></button></div>
+          <div class="writing-footer"><span id="lyricsCount">0 líneas · 0 palabras</span><button class="primary-button" id="applyLyrics">Siguiente</button></div>
         </div>
       </section>
       <section class="workspace mode-panel" data-panel="prepare">
         <div class="prep-header">
           <div><span class="eyebrow">Partitura emocional</span><h1 id="displayTitle">Volver a mirar</h1><p>Selecciona palabras para dejar una intención, una respiración o un gesto.</p></div>
-          <div class="header-actions"><button class="soft-button" id="clearSelection">Limpiar selección</button><button class="primary-button add-button" id="openNote" disabled>Añadir indicación</button></div>
+          <div class="header-actions"><button class="soft-button" id="clearSelection">Limpiar selección</button><button class="primary-button add-button" id="openNote" disabled>Añadir indicación</button><button class="soft-button rehearsal-mode-button" id="startRehearsal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z"/></svg><span>Modo ensayo</span><small class="visually-hidden" id="syncSummary">Avance a 76 BPM</small></button></div>
         </div>
         <div class="mobile-selection-guide" id="mobileSelectionGuide" hidden><span class="selection-step">1</span><strong id="mobileSelectionText">Toca la primera palabra de la frase</strong><button id="cancelMobileSelection" aria-label="Cancelar selección">×</button></div>
         <div class="prepare-layout">
@@ -55,11 +55,11 @@ queda una luz dentro de mí</textarea>
             <div class="metronome-control"><label class="toggle-row" for="metronomeEnabled"><span><strong>Metrónomo</strong><small>Suena junto a la canción</small></span><input id="metronomeEnabled" type="checkbox" checked><i aria-hidden="true"></i></label><label class="volume-row" for="metronomeVolume"><span>Volumen</span><input id="metronomeVolume" type="range" min="0" max="100" value="55"><output id="metronomeVolumeValue">55%</output></label></div>
             <div class="audio-box" id="audioBox">
               <div class="audio-empty" id="audioEmpty"><span class="audio-icon" aria-hidden="true">♪</span><div><strong>Añadir pista de karaoke</strong><small>El audio no sale de tu dispositivo</small></div><button class="soft-button" id="chooseAudio">Elegir audio</button><input id="audioFile" type="file" accept="audio/*" hidden></div>
-              <div class="audio-loaded" id="audioLoaded" hidden><div class="audio-file-row"><span class="audio-icon">♪</span><div><strong id="audioName"></strong><small id="audioDuration">Lista para sincronizar</small></div><button class="icon-button small" id="removeAudio" aria-label="Quitar pista">×</button></div><audio id="audioPlayer" controls preload="metadata"></audio><div class="pitch-control"><div><strong>Tonalidad</strong><small id="pitchLabel">Tono original</small></div><span class="pitch-buttons"><button id="pitchDown" type="button" aria-label="Bajar un semitono">−</button><output id="pitchValue">0</output><button id="pitchUp" type="button" aria-label="Subir un semitono">+</button></span></div><input class="pitch-slider" id="pitchSlider" type="range" min="-6" max="6" step="1" value="0" aria-label="Semitonos de la pista"><p class="tempo-status" id="tempoStatus">Detectando tempo…</p><p class="downbeat-status" id="downbeatStatus">Pulso 1: todavía sin marcar</p><div class="audio-action-row"><button class="soft-button" id="detectTempo" type="button">Detectar BPM</button><button class="primary-button" id="openSync" type="button">Sincronizar letra</button><button class="soft-button" id="completeSyncMarks" type="button" disabled>Completar marcas</button><button class="soft-button danger-soft" id="resetSyncMarks" type="button" disabled>Borrar marcas</button></div></div>
+              <div class="audio-loaded" id="audioLoaded" hidden><div class="audio-file-row"><span class="audio-icon">♪</span><div><strong id="audioName"></strong><small id="audioDuration">Lista para sincronizar</small></div><button class="icon-button small" id="removeAudio" aria-label="Quitar pista">×</button></div><div class="pitch-control"><div><strong>Tonalidad</strong><small id="pitchLabel">Tono original</small></div><span class="pitch-buttons"><button id="pitchDown" type="button" aria-label="Bajar un semitono">−</button><output id="pitchValue">0</output><button id="pitchUp" type="button" aria-label="Subir un semitono">+</button></span></div><input class="pitch-slider" id="pitchSlider" type="range" min="-6" max="6" step="1" value="0" aria-label="Semitonos de la pista"><p class="tempo-status" id="tempoStatus">Detectando tempo…</p><p class="downbeat-status" id="downbeatStatus">Pulso 1: todavía sin marcar</p><div class="audio-action-row"><button class="soft-button" id="detectTempo" type="button">Detectar BPM</button><button class="primary-button" id="openSync" type="button">Sincronizar letra</button><button class="soft-button" id="completeSyncMarks" type="button" disabled>Rellenar marcas automáticamente</button><button class="soft-button danger-soft" id="resetSyncMarks" type="button" disabled>Reiniciar marcas</button></div></div>
             </div>
-            <button class="rehearse-cta" id="startRehearsal"><span class="play-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z"/></svg></span><span><strong>Ensayar canción</strong><small id="syncSummary">Avance a 76 BPM</small></span><svg class="cta-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></button>
           </aside></details>
         </div>
+        <div class="sticky-audio-dock" id="audioDock" hidden><div class="dock-track"><span class="audio-icon" aria-hidden="true">♪</span><div><strong id="dockAudioName"></strong><small>Pista de ensayo</small></div></div><audio id="audioPlayer" controls preload="metadata"></audio></div>
       </section>
       <section class="mode-panel rehearsal" data-panel="rehearse" hidden>
         <header class="rehearsal-header"><button class="soft-button compact rehearsal-back" id="exitRehearsal" aria-label="Volver a preparar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>Preparar</span></button><div><span id="rehearsalTitle">Volver a mirar</span><small id="rehearsalMeta">76 BPM · 4 pulsos por línea</small></div><button class="icon-button" id="rehearsalFullscreen" title="Pantalla completa" aria-label="Usar pantalla completa"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></header>
@@ -75,7 +75,7 @@ queda una luz dentro de mí</textarea>
     </section>
   </div>
   <div class="sheet-backdrop" id="libraryBackdrop" hidden>
-    <section class="library-sheet" role="dialog" aria-modal="true" aria-labelledby="libraryTitle"><header><div><span class="eyebrow">Tu repertorio</span><h2 id="libraryTitle">Mis canciones</h2></div><button class="icon-button" id="closeLibrary" aria-label="Cerrar">×</button></header><div class="library-actions"><button class="primary-button" id="newSong">+ Nueva canción</button><button class="soft-button" id="importSong">Importar</button><input id="importFile" type="file" accept="application/json,.json" hidden></div><div class="song-list" id="songList"></div><footer><button class="soft-button" id="exportSong">Descargar copia</button></footer></section>
+    <section class="library-sheet" role="dialog" aria-modal="true" aria-labelledby="libraryTitle"><header><div><span class="eyebrow">Tu repertorio</span><h2 id="libraryTitle">Mis canciones</h2></div><button class="icon-button" id="closeLibrary" aria-label="Cerrar">×</button></header><div class="library-actions"><button class="primary-button" id="newSong">+ Nueva canción</button><button class="soft-button" id="importSong">Importar</button><input id="importFile" type="file" accept="application/json,.json" hidden></div><div class="song-list" id="songList"></div><footer><button class="soft-button" id="exportSong">Descargar proyecto</button></footer></section>
   </div>
   <div class="sheet-backdrop" id="metronomeBackdrop" hidden>
     <section class="metronome-sheet" role="dialog" aria-modal="true" aria-labelledby="metronomeTitle">
@@ -103,7 +103,7 @@ queda una luz dentro de mí</textarea>
         <button class="sync-remove" id="syncRemoveMark" type="button" hidden>Quitar marca de esta línea</button>
         <p class="sync-help">La primera marca fija el <strong>primer pulso del compás</strong>. Las siguientes indican cuándo comienza cada frase. También puedes usar la tecla <strong>M</strong>.</p>
       </div>
-      <footer><button class="danger-link" id="clearSync">Borrar todas las marcas</button><button class="primary-button" id="finishSync">Terminar</button></footer>
+      <footer><button class="danger-link" id="clearSync">Reiniciar marcas</button><button class="primary-button" id="finishSync">Terminar</button></footer>
     </section>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div><script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.js"></script><script src="app.js"></script>

@@ -156,6 +156,7 @@
     stopRehearsal();
     document.querySelectorAll('.mode-panel').forEach(panel => { panel.hidden = panel.dataset.panel !== mode; });
     document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === mode));
+    document.body.classList.toggle('audio-dock-visible', mode === 'prepare' && Boolean(audioUrl));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -203,15 +204,26 @@
         row.appendChild(cues);
       }
       if (line.words.length) {
+        const actions = document.createElement('div');
+        actions.className = 'line-sync-actions';
         const sync = document.createElement('button');
         const time = state.timestamps[line.lineIndex];
+        const isFirstLine = line.lineIndex === nonEmptyLines()[0];
         sync.className = `line-sync${Number.isFinite(time) ? ' synced' : ''}`;
-        sync.textContent = Number.isFinite(time) ? `Inicio ${formatMarkerTime(time)}` : 'Marcar inicio';
+        sync.textContent = Number.isFinite(time) ? `${isFirstLine ? 'Inicio letra' : 'Inicio'} ${formatMarkerTime(time)}` : (isFirstLine ? 'Marcar inicio letra' : 'Marcar inicio frase');
         sync.title = Number.isFinite(time) ? 'Instante en que comienza esta frase · pulsa para modificarlo o borrarlo' : 'Elegir cuándo comienza esta frase';
         sync.addEventListener('click', event => markLineTime(line.lineIndex, event));
-        row.appendChild(sync);
-        const playhead = document.createElement('span'); playhead.className = 'playback-playhead'; playhead.ariaHidden = 'true';
-        row.appendChild(playhead);
+        actions.appendChild(sync);
+        if (Number.isFinite(time)) {
+          const remove = document.createElement('button');
+          remove.className = 'line-sync-delete'; remove.type = 'button'; remove.textContent = '×';
+          remove.title = 'Eliminar marca de tiempo'; remove.setAttribute('aria-label', `Eliminar marca de tiempo de “${line.raw}”`);
+          remove.addEventListener('click', event => {
+            event.stopPropagation(); state.timestamps[line.lineIndex] = null; persist(); renderScore(); updateSyncSummary(); updateSyncView(false); showToast('Marca eliminada');
+          });
+          actions.appendChild(remove);
+        }
+        row.appendChild(actions);
       }
       score.appendChild(row);
     });
@@ -220,7 +232,8 @@
 
   function updatePreparePlaybackCursor() {
     const audio = $('audioPlayer'), playable = nonEmptyLines();
-    document.querySelectorAll('.score-line.playback-active').forEach(row => { row.classList.remove('playback-active'); row.style.removeProperty('--line-progress'); });
+    document.querySelectorAll('.score-line.playback-active').forEach(row => row.classList.remove('playback-active'));
+    document.querySelectorAll('.lyrics-score .word').forEach(word => { word.classList.remove('playback-read', 'playback-current'); word.style.removeProperty('--word-progress'); });
     if (!audioUrl || !playable.length || !Number.isFinite(audio.currentTime)) { prepareActiveLine = null; return; }
 
     const current = audio.currentTime, { times } = estimatedLineTimes(playable);
@@ -232,9 +245,27 @@
     const row = document.querySelector(`.score-line[data-line-index="${lineIndex}"]`);
     if (!row) return;
     const progress = end > start ? clamp((current - start) / (end - start), 0, 1) : 1;
-    row.classList.add('playback-active'); row.style.setProperty('--line-progress', `${(progress * 100).toFixed(2)}%`);
+    row.classList.add('playback-active'); applyWordProgress(row, progress, '.word');
     if (!audio.paused && prepareActiveLine !== lineIndex && document.querySelector('.lyrics-accordion')?.open) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     prepareActiveLine = lineIndex;
+  }
+
+  function applyWordProgress(container, progress, selector) {
+    const words = [...container.querySelectorAll(selector)];
+    if (!words.length) return;
+    const lengths = words.map((word, index) => Math.max(1, word.textContent.length) + (index < words.length - 1 ? 1 : 0));
+    const target = clamp(progress, 0, 1) * lengths.reduce((sum, length) => sum + length, 0);
+    let consumed = 0;
+    words.forEach((word, index) => {
+      const length = lengths[index];
+      word.classList.remove('playback-read', 'playback-current'); word.style.removeProperty('--word-progress');
+      if (target >= consumed + length) word.classList.add('playback-read');
+      else if (target >= consumed) {
+        word.classList.add('playback-current');
+        word.style.setProperty('--word-progress', `${clamp((target - consumed) / length * 100, 0, 100).toFixed(2)}%`);
+      }
+      consumed += length;
+    });
   }
 
   function estimatedLineTimes(playable = nonEmptyLines()) {
@@ -437,8 +468,9 @@
     $('syncPrevious').disabled = isBeatStep; $('syncNext').disabled = syncPosition >= playable.length - 1;
     $('syncRemoveMark').hidden = !Number.isFinite(markedAt);
     $('syncMark').classList.toggle('marked', Number.isFinite(markedAt));
-    $('syncMark').querySelector('span').textContent = Number.isFinite(markedAt) ? (isBeatStep ? 'Actualizar Pulso 1' : 'Actualizar inicio') : (isBeatStep ? 'Marcar Pulso 1' : 'Marcar inicio');
-    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatMarkerTime(markedAt)} · puedes moverla o borrarla` : (isBeatStep ? 'Pulsa en el primer pulso fuerte del compás' : 'Pulsa cuando comience esta frase');
+    const markLabel = isBeatStep ? 'primer pulso' : (syncPosition === 0 ? 'inicio letra' : 'inicio frase');
+    $('syncMark').querySelector('span').textContent = `${Number.isFinite(markedAt) ? 'Actualizar' : 'Marcar'} ${markLabel}`;
+    $('syncMarkHint').textContent = Number.isFinite(markedAt) ? `Marcada en ${formatMarkerTime(markedAt)} · puedes moverla o borrarla` : (isBeatStep ? 'Pulsa en el primer pulso fuerte del compás' : (syncPosition === 0 ? 'Pulsa cuando entre la primera palabra de la letra' : 'Pulsa cuando comience esta frase'));
     if (seekToMark && Number.isFinite(markedAt)) $('audioPlayer').currentTime = markedAt;
   }
 
@@ -499,17 +531,20 @@
   }
 
   function clearAllSyncMarks() {
-    if ((!state.timestamps.some(Number.isFinite) && !Number.isFinite(state.downbeatTime)) || !confirm('¿Borrar el Pulso 1 y todas las marcas de frases?')) return;
+    if ((!state.timestamps.some(Number.isFinite) && !Number.isFinite(state.downbeatTime)) || !confirm('¿Reiniciar el primer pulso y todas las marcas de frases?')) return;
     state.downbeatTime = null; state.timestamps = []; syncPosition = -1; persist(); renderScore(); updateSyncSummary(); updateSyncView(false);
+    showToast('Marcas reiniciadas');
   }
 
-  function loadAudio(file) {
+  function loadAudio(file, analyze = true) {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = URL.createObjectURL(file); audioFileName = file.name; audioFileData = file;
-    $('audioPlayer').src = audioUrl; $('audioName').textContent = file.name;
-    $('audioEmpty').hidden = true; $('audioLoaded').hidden = false;
+    $('audioPlayer').src = audioUrl; $('audioName').textContent = file.name; $('dockAudioName').textContent = file.name;
+    $('audioEmpty').hidden = true; $('audioLoaded').hidden = false; $('audioDock').hidden = false;
+    document.body.classList.add('audio-dock-visible');
     setupPitchProcessing(); syncPitchControls();
-    $('tempoStatus').textContent = 'Detectando tempo…'; detectTempo(file);
+    if (analyze) { $('tempoStatus').textContent = 'Detectando tempo…'; detectTempo(file); }
+    else $('tempoStatus').textContent = `Tempo guardado: ${state.bpm} BPM`;
     updateSyncSummary(); showToast('Pista cargada. Ahora puedes marcar las líneas.');
   }
 
@@ -519,7 +554,7 @@
     $('audioPlayer').pause();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = null; audioFileName = ''; audioFileData = null; $('audioPlayer').removeAttribute('src');
-    $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; syncPitchControls(); updateSyncSummary();
+    $('audioLoaded').hidden = true; $('audioEmpty').hidden = false; $('audioDock').hidden = true; document.body.classList.remove('audio-dock-visible'); syncPitchControls(); updateSyncSummary();
   }
 
   async function detectTempo(file = audioFileData) {
@@ -752,6 +787,7 @@
     if (!tokens.length) { showToast('Escribe una letra antes de ensayar'); setMode('write'); return; }
     document.querySelectorAll('.mode-panel').forEach(panel => { panel.hidden = panel.dataset.panel !== 'rehearse'; });
     document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === 'rehearse'));
+    document.body.classList.remove('audio-dock-visible');
     rehearsal.line = nonEmptyLines()[0] ?? 0; rehearsal.elapsed = 0;
     $('rehearsalTitle').textContent = state.title;
     const synced = audioUrl && state.timestamps.filter(Number.isFinite).length > 0;
@@ -765,7 +801,12 @@
     lines.forEach(line => {
       if (!line.words.length) return;
       const block = document.createElement('div'); block.className = 'tele-line'; block.dataset.line = line.lineIndex;
-      const text = document.createElement('div'); text.textContent = line.raw; block.appendChild(text);
+      const text = document.createElement('div'); text.className = 'tele-text';
+      line.words.forEach((token, index) => {
+        const word = document.createElement('span'); word.className = 'tele-word'; word.textContent = token.word; text.appendChild(word);
+        if (index < line.words.length - 1) text.append(' ');
+      });
+      block.appendChild(text);
       const first = line.words[0].index, last = line.words.at(-1).index;
       const marks = state.annotations.filter(mark => mark.start <= last && mark.end >= first);
       if (marks.length) {
@@ -789,8 +830,15 @@
   }
 
   function focusTeleLine(lineIndex, smooth = true) {
+    const changed = rehearsal.line !== lineIndex;
     rehearsal.line = lineIndex; updateTeleClasses();
-    document.querySelector(`.tele-line[data-line="${lineIndex}"]`)?.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
+    if (changed || !smooth) document.querySelector(`.tele-line[data-line="${lineIndex}"]`)?.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  function updateTeleWordProgress(progress) {
+    document.querySelectorAll('.tele-word').forEach(word => { word.classList.remove('playback-read', 'playback-current'); word.style.removeProperty('--word-progress'); });
+    const active = document.querySelector(`.tele-line[data-line="${rehearsal.line}"]`);
+    if (active) applyWordProgress(active, progress, '.tele-word');
   }
 
   function moveLine(direction) {
@@ -799,6 +847,7 @@
     focusTeleLine(playable[position]);
     if (audioUrl && Number.isFinite(state.timestamps[playable[position]])) $('audioPlayer').currentTime = state.timestamps[playable[position]];
     else rehearsal.elapsed = position * lineDuration();
+    updateTeleWordProgress(0);
     updateTransport();
   }
 
@@ -809,6 +858,7 @@
     rehearsal.elapsed = 0; rehearsal.startedAt = performance.now();
     if (audioUrl) $('audioPlayer').currentTime = 0;
     focusTeleLine(firstLine);
+    updateTeleWordProgress(0);
     if (wasPlaying) { startMetronome(); rehearsal.raf = requestAnimationFrame(tick); }
     updateTransport(); showToast('Volvimos al inicio');
   }
@@ -872,6 +922,9 @@
       focusTeleLine(playable[position]);
       if (position === playable.length - 1 && rehearsal.elapsed >= playable.length * lineDuration()) { pauseRehearsal(); }
     }
+    const { times } = estimatedLineTimes(playable), position = Math.max(0, playable.indexOf(rehearsal.line));
+    const start = times[position] ?? 0, end = times[position + 1] ?? totalRehearsalTime();
+    updateTeleWordProgress(end > start ? (rehearsal.elapsed - start) / (end - start) : 1);
     updateTransport(); rehearsal.raf = requestAnimationFrame(tick);
   }
 
@@ -915,11 +968,18 @@
     removeAudio(); updateEditorFromState(); persist(true); $('libraryBackdrop').hidden = true; setMode('write'); $('songTitle').select();
   }
 
-  function exportCurrent() {
-    const blob = new Blob([JSON.stringify({ ...state, format: 'vocal-emotion-studio', version: 2 }, null, 2)], { type: 'application/json' });
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error || new Error('No se pudo leer la pista')); reader.readAsDataURL(file); });
+  }
+
+  async function exportCurrent() {
+    try {
+      const audio = audioFileData ? { name: audioFileName || audioFileData.name, type: audioFileData.type || 'audio/mpeg', dataUrl: await fileToDataUrl(audioFileData) } : null;
+      const blob = new Blob([JSON.stringify({ ...state, format: 'vocal-emotion-studio', version: 3, audio }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob), link = document.createElement('a');
     link.href = url; link.download = `${state.title.replace(/[^a-z0-9áéíóúñ]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'cancion'}.vocal.json`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000); showToast('Copia descargada');
+      setTimeout(() => URL.revokeObjectURL(url), 1000); showToast(audio ? 'Proyecto descargado con letra, ajustes y pista' : 'Proyecto descargado con letra y ajustes');
+    } catch (error) { showToast(`No pude descargar: ${error.message}`); }
   }
 
   async function importSong(file) {
@@ -927,6 +987,10 @@
       const raw = JSON.parse(await file.text());
       if (typeof raw.lyrics !== 'string') throw new Error('El archivo no contiene una letra');
       raw.id = `song-${Date.now()}`; state = sanitizeSong(raw); updateEditorFromState(); persist(true);
+      if (raw.audio?.dataUrl) {
+        const response = await fetch(raw.audio.dataUrl), blob = await response.blob();
+        loadAudio(new File([blob], raw.audio.name || 'pista-importada', { type: raw.audio.type || blob.type }), false);
+      } else removeAudio();
       $('libraryBackdrop').hidden = true; setMode('prepare'); showToast('Canción importada');
     } catch (error) { showToast(`No pude importar: ${error.message}`); }
   }
